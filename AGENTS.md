@@ -84,6 +84,10 @@ strings under `a11y.dataLab` in each locale.
 - **Mathematical notation is not translated:** the model equations and parameter symbols in
   `formatFit.ts` (`y = m·x + b`) and the CSV column names in `exportCsv.ts` (`in_fit`) are
   literals, the same in every language, so an exported file opens the same way everywhere.
+- `assets/screenshot.png`: captured with a real browser screenshot (Playwright `page.screenshot()` at
+  1154×753), not Baton's `generate-screenshots.sh`. That tool rasterizes the Scenery display through
+  joist's `ScreenshotGenerator`, which cannot see HTML elements, so the table, column choosers and
+  range fields come out blank. Re-capture by hand after a `refresh-screenshots` run.
 - `scripts/generate-sample.ts`: sim-specific script that writes the bundled sample dataset.
 - `tests/memory-leak.test.ts`: the disposal list is empty — the model and view are built once and
   live for the page's lifetime.
