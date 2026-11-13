@@ -1,21 +1,81 @@
 {
-  "title": "Plantilla de Simulación",
+  "title": "Laboratorio de datos",
   "screens": {
-    "sim": "Simulación"
+    "dataLab": "Laboratorio de datos"
+  },
+  "labels": {
+    "openFile": "Abrir CSV…",
+    "pasteTable": "Pegar tabla",
+    "sampleData": "Datos de ejemplo",
+    "addRow": "Añadir fila",
+    "exportCsv": "Exportar CSV",
+    "copySummary": "Copiar resultados",
+    "xAxis": "eje x",
+    "yAxis": "eje y",
+    "fitModel": "Modelo de ajuste",
+    "proportional": "Proporcional",
+    "linear": "Lineal",
+    "quadratic": "Cuadrático",
+    "rangeFrom": "Intervalo de",
+    "rangeTo": "a",
+    "clearRange": "Borrar intervalo",
+    "zoomToRange": "Ampliar el intervalo",
+    "showAll": "Mostrar todo",
+    "residuals": "Residuos",
+    "results": "Resultados del ajuste",
+    "inFit": "En el ajuste",
+    "row": "Fila",
+    "pointsUsed": "Puntos usados: {{count}}",
+    "rmse": "RMSE = {{value}}",
+    "rSquared": "R² = {{value}}",
+    "statusAll": "Se usan {{used}} de {{total}} filas (sin intervalo seleccionado)",
+    "statusRange": "Se usan {{used}} de {{total}} filas · {{name}} de {{min}} a {{max}}",
+    "statusSkipped": "{{count}} omitidas (falta un valor)",
+    "tooFewPoints": "Selecciona al menos {{required}} puntos para este modelo.",
+    "tooFewDistinctX": "Este modelo necesita al menos {{required}} valores distintos de x.",
+    "allXZero": "Todos los valores de x son cero, así que no se puede hallar la pendiente.",
+    "noScatter": "No sobran puntos para estimar las incertidumbres.",
+    "fewPoints": "Pocos puntos: interpreta las incertidumbres con cautela.",
+    "defaultColumnName": "Columna {{position}}",
+    "importFailed": "No se encontró ninguna tabla en ese texto.",
+    "pasteHint": "Copia celdas en una hoja de cálculo y pulsa Ctrl+V aquí.",
+    "copied": "Resultados copiados.",
+    "localOnly": "Tus datos no salen de este navegador.",
+    "dragHint": "Arrastra sobre la gráfica para seleccionar un intervalo."
   },
   "a11y": {
-    "screenSummary": {
-      "playArea": "El área de juego muestra el contenido principal de la simulación.",
-      "controlArea": "El área de control tiene un botón Restablecer todo que devuelve la simulación a su estado inicial.",
-      "interactionHint": "Explora la simulación interactuando con sus controles."
-    },
-    "currentDetails": "La simulación está en su estado inicial.",
-    "controls": {
-      "exampleControl": "Control de ejemplo"
+    "dataLab": {
+      "screenSummary": {
+        "playArea": "El área de juego tiene una tabla de datos editable, una gráfica de la columna y elegida frente a la columna x elegida con una curva ajustada, y una gráfica de los residuos.",
+        "controlArea": "El área de control tiene botones para abrir un archivo CSV, pegar una tabla, cargar datos de ejemplo, añadir una fila y exportar; selectores para las columnas x e y y el modelo de ajuste; campos para el intervalo de x que usa el ajuste; y un botón Restablecer todo que borra el intervalo y conserva tus datos.",
+        "interactionHint": "Abre o pega tus datos, elige las columnas y luego fija un intervalo para ajustar solo una parte de los datos."
+      },
+      "currentDetails": "{{status}} Ajuste {{model}}.",
+      "controls": {
+        "dataTable": "Tabla de datos",
+        "plot": "Gráfica de los datos y del ajuste",
+        "residualPlot": "Gráfica de los residuos",
+        "rangeStart": "Inicio del intervalo",
+        "rangeEnd": "Fin del intervalo",
+        "rangeHelp": "Usa las flechas izquierda y derecha para pasar al siguiente punto. Mantén Mayús para pasos finos.",
+        "rangeMinimum": "Mínimo del intervalo",
+        "rangeMaximum": "Máximo del intervalo",
+        "xColumn": "Columna en el eje x",
+        "yColumn": "Columna en el eje y",
+        "columnHeader": "Nombre y unidad de la columna {{position}}",
+        "cell": "{{column}}, fila {{row}}"
+      },
+      "keyboardHelp": {
+        "rangeHeading": "Bordes del intervalo",
+        "moveToPoint": "Mover al siguiente punto",
+        "moveFine": "Mover en pasos finos",
+        "moveTenPoints": "Mover diez puntos",
+        "moveToEnds": "Mover al primer o al último punto"
+      }
     }
   },
   "preferences": {
     "title": "Simulación",
-    "exampleToggle": "Ejemplo de alternancia"
+    "showResiduals": "Mostrar la gráfica de residuos"
   }
 }

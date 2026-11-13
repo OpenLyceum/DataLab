@@ -190,7 +190,7 @@ const { init, madeWithSceneryStackSplashDataURI } = await import("scenerystack/i
 
 init({
   // Must match the package.json "name" (and the name in src/init.ts).
-  name: "scenerystack-template",
+  name: "data-lab",
   version: "1.0.0-test",
   brand: "made-with-scenerystack",
   locale: "en",

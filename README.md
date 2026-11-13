@@ -1,18 +1,23 @@
-# SceneryStack Template
+# Data Lab
 
 [![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
-A reusable SceneryStack simulation template for one or N screens, built with
-[SceneryStack](https://scenerystack.org/), Vite 8, TypeScript 7, and Biome 2.
+Plot and analyze your own lab data in the browser. Import a CSV or paste a table,
+choose the x and y columns, drag across the graph to select a range, fit a model to
+the points in that range, and read the parameters, their uncertainties and the
+residuals. Nothing is uploaded: the data stays in the page.
 
 ## Features
 
-- SceneryStack scaffold with model/view separation (`rename` + `scaffold-screens` for one or N screens)
-- English, Spanish, and French localization via `StringManager`
-- Default and projector color profiles
-- Progressive Web App (installable, offline-capable)
-- Git hooks for Biome pre-commit checks
-- Shared GitHub Actions CI via `OpenLyceum/Baton`
+- Import a CSV file (picker or drag-and-drop) or paste cells from a spreadsheet; comma, tab and semicolon delimiters, decimal commas, units read from headers such as `Time (s)`
+- Editable data table; rows used by the fit are marked
+- Select a range of x by dragging on the graph, moving its edges with the pointer or keyboard, or typing the bounds
+- Proportional, linear and quadratic least-squares fits with parameter uncertainties, units, RMSE and R²
+- Residual graph on the same x axis
+- Export a CSV with `in_fit`, `fit_value` and `residual` columns; copy the fit results as text
+- Bundled sample dataset: a cart that speeds up on a ramp and then coasts on a level track
+- Fit engine checked against NIST Statistical Reference Datasets
+- English, Spanish, and French; default and projector color profiles; installable and usable offline
 
 ## Quick Start
 
@@ -39,10 +44,10 @@ npm start        # dev server → http://localhost:5173
 | `npm run format` | Auto-format all files |
 | `npm run fix` | Lint + auto-fix |
 | `npm run icons` | Regenerate PNG icons from `public/icons/icon.svg` |
-| `npm run rename` | Sim-level fork/rename (`--id`, `--name`) |
-| `npm run scaffold-screens` | Emit N fleet-named screen packages from `sim-screen/` (`--shared-model` optional) |
 | `npm run release` | `check && lint && build && test`, then version patch + push tags |
 | `npm run clean` | Remove `dist/` |
+| `npx playwright test tests/browser` | End-to-end workflow tests in Chromium |
+| `node scripts/generate-sample.ts` | Rewrite the bundled sample dataset |
 
 New sims start at `version: "0.0.0"` in `package.json`. Bump only when cutting a release (for example `npm version patch` and a matching git tag). Keep `name` in kebab-case; it is separate from the SceneryStack sim identifier in `src/init.ts`, which reads its `version` from `package.json`.
 

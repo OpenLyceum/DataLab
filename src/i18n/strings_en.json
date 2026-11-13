@@ -1,21 +1,81 @@
 {
-  "title": "SceneryStack Template",
+  "title": "Data Lab",
   "screens": {
-    "sim": "Sim"
+    "dataLab": "Data Lab"
+  },
+  "labels": {
+    "openFile": "Open CSV…",
+    "pasteTable": "Paste table",
+    "sampleData": "Sample data",
+    "addRow": "Add row",
+    "exportCsv": "Export CSV",
+    "copySummary": "Copy results",
+    "xAxis": "x axis",
+    "yAxis": "y axis",
+    "fitModel": "Fit model",
+    "proportional": "Proportional",
+    "linear": "Linear",
+    "quadratic": "Quadratic",
+    "rangeFrom": "Range from",
+    "rangeTo": "to",
+    "clearRange": "Clear range",
+    "zoomToRange": "Zoom to range",
+    "showAll": "Show all",
+    "residuals": "Residuals",
+    "results": "Fit results",
+    "inFit": "In fit",
+    "row": "Row",
+    "pointsUsed": "Points used: {{count}}",
+    "rmse": "RMSE = {{value}}",
+    "rSquared": "R² = {{value}}",
+    "statusAll": "Using {{used}} of {{total}} rows (no range selected)",
+    "statusRange": "Using {{used}} of {{total}} rows · {{name}} from {{min}} to {{max}}",
+    "statusSkipped": "{{count}} skipped (missing value)",
+    "tooFewPoints": "Select at least {{required}} points for this model.",
+    "tooFewDistinctX": "This model needs at least {{required}} different x values.",
+    "allXZero": "Every x is zero, so the slope cannot be found.",
+    "noScatter": "No points left over to estimate uncertainties.",
+    "fewPoints": "Few points: treat the uncertainties with caution.",
+    "defaultColumnName": "Column {{position}}",
+    "importFailed": "No table found in that text.",
+    "pasteHint": "Copy cells in a spreadsheet, then press Ctrl+V here.",
+    "copied": "Results copied.",
+    "localOnly": "Your data stays in this browser.",
+    "dragHint": "Drag across the graph to select a range."
   },
   "a11y": {
-    "screenSummary": {
-      "playArea": "The play area shows the main simulation content.",
-      "controlArea": "The control area has a Reset All button that returns the simulation to its starting state.",
-      "interactionHint": "Explore the simulation by interacting with its controls."
-    },
-    "currentDetails": "The simulation is in its initial state.",
-    "controls": {
-      "exampleControl": "Example control"
+    "dataLab": {
+      "screenSummary": {
+        "playArea": "The play area has a data table you can edit, a graph of the chosen y column against the chosen x column with a fitted curve, and a graph of the residuals.",
+        "controlArea": "The control area has buttons to open a CSV file, paste a table, load sample data, add a row and export; choosers for the x and y columns and the fit model; fields for the range of x used by the fit; and a Reset All button that clears the range and keeps your data.",
+        "interactionHint": "Open or paste your data, choose the columns, then set a range to fit only part of the data."
+      },
+      "currentDetails": "{{status}} {{model}} fit.",
+      "controls": {
+        "dataTable": "Data table",
+        "plot": "Graph of the data and the fit",
+        "residualPlot": "Graph of the residuals",
+        "rangeStart": "Range start",
+        "rangeEnd": "Range end",
+        "rangeHelp": "Use the left and right arrow keys to move to the next data point. Hold Shift for fine steps.",
+        "rangeMinimum": "Range minimum",
+        "rangeMaximum": "Range maximum",
+        "xColumn": "Column on the x axis",
+        "yColumn": "Column on the y axis",
+        "columnHeader": "Name and unit of column {{position}}",
+        "cell": "{{column}}, row {{row}}"
+      },
+      "keyboardHelp": {
+        "rangeHeading": "Range Edges",
+        "moveToPoint": "Move to next data point",
+        "moveFine": "Move in fine steps",
+        "moveTenPoints": "Move ten data points",
+        "moveToEnds": "Move to first or last point"
+      }
     }
   },
   "preferences": {
     "title": "Simulation",
-    "exampleToggle": "Example Toggle"
+    "showResiduals": "Show residual graph"
   }
 }
