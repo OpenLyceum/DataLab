@@ -1,0 +1,74 @@
+{
+  "name": "scenerystack-template",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "GitHub template for OpenLyceum SceneryStack sims (rename + scaffold-screens for one or N screens).",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OpenLyceum/SceneryStackTemplate.git"
+  },
+  "keywords": [
+    "template",
+    "simulation",
+    "SceneryStack",
+    "interactive",
+    "physics",
+    "education",
+    "pwa"
+  ],
+  "scripts": {
+    "start": "vite",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:single": "tsc && vite build --mode single",
+    "preview": "vite preview",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "fix": "biome check --write .",
+    "check": "tsc --noEmit && tsc -p tsconfig.scripts.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "release": "npm run check && npm run lint && npm run build && npm test && npm version patch && git push && git push --tags",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:fuzz": "node scripts/test-fuzz.ts",
+    "test:fuzz:quick": "node scripts/test-fuzz.ts 10",
+    "test:fuzz:long": "node scripts/test-fuzz.ts 300",
+    "icons": "node scripts/generate-icons.ts",
+    "rename": "node scripts/rename-sim.ts",
+    "scaffold-screens": "node scripts/scaffold-screens.ts",
+    "clean": "rm -rf dist",
+    "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true"
+  },
+  "dependencies": {
+    "scenerystack": "^3.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.6",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "happy-dom": "^21.0.4",
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=26"
+  },
+  "overrides": {
+    "lodash": "~4.18.1",
+    "three": "~0.125.2",
+    "brace-expansion": "~5.0.12"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=26",
+      "onFail": "error"
+    }
+  }
+}
