@@ -28,6 +28,9 @@ The roadmap (first release, later releases, open decisions) is in
 | `src/data-lab/model/DataLabModel.ts` | Screen state and the derived chain dataset → inclusion → fit |
 | `src/data-lab/model/samples/cart-ramp-then-level.csv` | Bundled sample (synthetic; written by `scripts/generate-sample.ts`) |
 | `src/common/view/ChartFrameNode.ts` | Shared bamboo frame: plot rectangle, grid, ticks, labels, clipped data layer |
+| `src/common/view/axisRange.ts` | Zoom-about-an-anchor and pan arithmetic for one axis |
+| `src/common/view/GraphGestures.ts` | Wheel, pinch and axis-drag zoom/pan for a `ChartFrameNode` |
+| `src/data-lab/view/GraphView.ts` | View state: visible x and y intervals (`null` = automatic), auto scale, zoom to range |
 | `src/common/view/PointsCanvasNode.ts` | All points of a graph on one canvas (filled = in the fit, hollow = not) |
 | `src/common/view/fileIO.ts` | File picker, drop target, Blob download |
 | `src/data-lab/view/PlotNode.ts` | Main graph, fitted curve, range band with pointer and keyboard handles |
@@ -46,6 +49,12 @@ The roadmap (first release, later releases, open decisions) is in
 - **The range is in data units**, stored as `{min, max}` or `null`. `null` means *every valid row*,
   not "the visible rows": zooming must never change a fit. Changing the x column clears the range
   (its bounds are in the old column's units); changing the y column keeps it.
+- **Zoom and pan are view state** (`GraphView`), never model state. Each axis is automatic (`null`)
+  or set by hand; an automatic y axis fits the points inside the visible x interval. The residual
+  graph shares the x interval and always fits its own y.
+- **Pinch attaches both pointers** to its own listener (`pointer.addInputListener(listener, true)`).
+  Without that, a `DragListener` snags a finger sliding over it (`allowTouchSnag`) and starts a
+  range sweep in the middle of the pinch.
 - **Reset All keeps the table.** It clears the range, the fit model and the zoom. A student's data
   must not vanish at one press.
 - **Fit method** (`leastSquares.ts`): x is shifted to its mean and scaled to [−1, 1], the design
@@ -103,8 +112,9 @@ strings under `a11y.dataLab` in each locale.
 | `tests/common/model/parseTable.test.ts` | Parser and table-editing cases |
 | `tests/common/model/includedRows.test.ts` | Inclusive bounds, unsorted x, repeated x, missing values |
 | `tests/common/model/formatFit.test.ts` | Units and rounding to the uncertainty |
+| `tests/common/view/axisRange.test.ts` | Zoom keeps its anchor, refuses to collapse; pan; padding |
 | `tests/common/model/exportCsv.test.ts` | Sample-dataset expectations, export columns, export → import round trip |
-| `tests/browser/workflow.spec.ts` | End-to-end in Chromium: typed range, dragged range, keyboard range, zoom independence, table edit and paste, CSV download, clipboard |
+| `tests/browser/workflow.spec.ts` | End-to-end in Chromium: typed range, dragged range, keyboard range, wheel zoom, axis-drag pan, pinch (CDP touch events), auto scale, table edit and paste, CSV download, clipboard. Page positions are computed from the screen view's transform, because the sim is not at scale 1 in the test viewport |
 
 Run the browser specs with `npx playwright test tests/browser` (set `FUZZ_PORT` if 5173 is taken).
 A new fit model needs a NIST or independently computed reference before it ships.

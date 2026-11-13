@@ -20,7 +20,7 @@
     "rangeTo": "to",
     "clearRange": "Clear range",
     "zoomToRange": "Zoom to range",
-    "showAll": "Show all",
+    "autoScale": "Auto scale",
     "residuals": "Residuals",
     "results": "Fit results",
     "inFit": "In fit",
@@ -41,7 +41,7 @@
     "pasteHint": "Copy cells in a spreadsheet, then press Ctrl+V here.",
     "copied": "Results copied.",
     "localOnly": "Your data stays in this browser.",
-    "dragHint": "Drag across the graph to select a range."
+    "dragHint": "Drag across the graph to select a range. Scroll or pinch to zoom; drag an axis to pan."
   },
   "a11y": {
     "dataLab": {

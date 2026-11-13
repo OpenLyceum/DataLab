@@ -14,6 +14,7 @@ residuals. Nothing is uploaded: the data stays in the page.
 - Select a range of x by dragging on the graph, moving its edges with the pointer or keyboard, or typing the bounds
 - Proportional, linear and quadratic least-squares fits with parameter uncertainties, units, RMSE and R²
 - Residual graph on the same x axis
+- Zoom with the wheel or a pinch, pan by dragging an axis, and return with Auto scale; zooming never changes a fit
 - Export a CSV with `in_fit`, `fit_value` and `residual` columns; copy the fit results as text
 - Bundled sample dataset: a cart that speeds up on a ramp and then coasts on a level track
 - Fit engine checked against NIST Statistical Reference Datasets

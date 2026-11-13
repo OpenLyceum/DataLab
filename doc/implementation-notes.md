@@ -49,9 +49,25 @@ Table details worth knowing:
 orders spacing and range updates so a tick set never lays out thousands of ticks.
 Points are painted on a single canvas (`PointsCanvasNode`).
 
-The x axis shows all valid data unless `xViewRangeProperty` (view state) is set by
-"Zoom to range". The selected range lives in the model in data units, so the two
-are independent.
+`GraphView` holds the visible x and y intervals as view state; `null` means
+automatic. An automatic x axis shows all valid data, and an automatic y axis fits
+the points inside the visible x interval. The selected range lives in the model in
+data units, so zooming and panning never change a fit.
+
+Zoom and pan (`GraphGestures.ts`, used by both graphs):
+
+| Gesture | Effect |
+|---|---|
+| Wheel over the plot | Zoom both axes about the cursor (x alone on the residual graph) |
+| Wheel over an axis | Zoom that axis alone |
+| Drag an axis | Pan that axis |
+| Shift+drag on the plot | Pan both axes |
+| Two fingers on the plot | Pinch to zoom, move to pan |
+| Auto scale button | Both axes back to automatic |
+
+A second finger abandons a one-finger range gesture and restores the range it
+started from. The two pinch pointers are attached to the pinch listener so no
+`DragListener` can snag them.
 
 Range gestures in `PlotNode`: drag on empty plot area sweeps a new range; drag an
 edge resizes (the opposite bound is fixed for the whole gesture, so edges may
@@ -71,12 +87,12 @@ the valid points.
 Done: scaffold; CSV, paste and drag-and-drop import; units from headers; editable
 table; column choosers; range by drag, handles, keyboard and numeric fields;
 proportional, linear and quadratic fits with standard errors, RMSE and R²;
-residual graph; CSV export; copy results; zoom to range.
+residual graph; CSV export; copy results; zoom to range; wheel and pinch zoom,
+pan and auto scale on both axes.
 
 Remaining for 0.1:
 
 - PNG export of the graph.
-- Wheel and pinch zoom, pan.
 - Announce the status line through a live region; bring the HTML controls into
   the reading order.
 - Delete-row control; column add/remove.

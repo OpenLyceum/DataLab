@@ -12,13 +12,16 @@ import { ChartRectangle, ChartTransform, GridLineSet, TickLabelSet, TickMarkSet 
 import { Range } from "scenerystack/dot";
 import { Shape } from "scenerystack/kite";
 import { Orientation } from "scenerystack/phet-core";
-import { Node, Text } from "scenerystack/scenery";
+import { Node, Rectangle, Text } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import DataLabColors from "../../DataLabColors.js";
 
 const LABEL_FONT = new PhetFont(12);
 const TICK_FONT = new PhetFont(10);
 const GRID_LINE_WIDTH = 0.5;
+
+/** Width of the strip left of the plot that holds the y tick labels and takes y-axis gestures. */
+const Y_AXIS_STRIP_WIDTH = 56;
 
 /** Distance from the plot edge to the axis labels. */
 const X_LABEL_OFFSET = 20;
@@ -58,8 +61,8 @@ export type ChartFrameNodeOptions = {
   readonly viewHeight: number;
   /** Target number of ticks on the y axis; fewer for a short graph. */
   readonly yTickCount?: number;
-  /** Whether numbers are printed under the x axis (off when another graph below shares it). */
-  readonly showXTickLabels?: boolean;
+  /** Height of the strip under the plot that takes x-axis gestures. */
+  readonly xAxisStripHeight: number;
 };
 
 export class ChartFrameNode extends Node {
@@ -69,6 +72,10 @@ export class ChartFrameNode extends Node {
   public readonly plotLayer: Node;
   public readonly xAxisLabel: Text;
   public readonly yAxisLabel: Text;
+  /** Invisible strips over the axes: wheel over one zooms that axis, a drag pans it. */
+  public readonly xAxisStrip: Rectangle;
+  public readonly yAxisStrip: Rectangle;
+  private readonly xTickLabels: TickLabelSet;
   public readonly viewWidth: number;
   public readonly viewHeight: number;
 
@@ -99,7 +106,9 @@ export class ChartFrameNode extends Node {
     });
 
     const gridOptions = { stroke: DataLabColors.chartGridColorProperty, lineWidth: GRID_LINE_WIDTH };
-    const tickOptions = { edge: "min" as const, stroke: DataLabColors.textColorProperty };
+    // Ticks and their labels straddle the plot edge; they must not take pointer
+    // events meant for the plot or the axis strips.
+    const tickOptions = { edge: "min" as const, stroke: DataLabColors.textColorProperty, pickable: false };
     const createLabel = (step: () => number) => (value: number) =>
       new Text(formatTick(value, step()), { font: TICK_FONT, fill: DataLabColors.textColorProperty });
 
@@ -109,6 +118,7 @@ export class ChartFrameNode extends Node {
     const yTicks = new TickMarkSet(chartTransform, Orientation.VERTICAL, 1, tickOptions);
     const yTickLabels = new TickLabelSet(chartTransform, Orientation.VERTICAL, 1, {
       edge: "min",
+      pickable: false,
       createLabel: createLabel(() => this.yStep),
     });
     this.xSets = [xGrid, xTicks];
@@ -118,16 +128,32 @@ export class ChartFrameNode extends Node {
     this.plotLayer.addChild(xGrid);
     this.plotLayer.addChild(yGrid);
 
-    this.children = [this.chartRectangle, this.plotLayer, xTicks, yTicks, yTickLabels];
+    this.xTickLabels = new TickLabelSet(chartTransform, Orientation.HORIZONTAL, 1, {
+      edge: "min",
+      pickable: false,
+      createLabel: createLabel(() => this.xStep),
+    });
+    this.xSets.push(this.xTickLabels);
 
-    if (options.showXTickLabels ?? true) {
-      const xTickLabels = new TickLabelSet(chartTransform, Orientation.HORIZONTAL, 1, {
-        edge: "min",
-        createLabel: createLabel(() => this.xStep),
-      });
-      this.xSets.push(xTickLabels);
-      this.addChild(xTickLabels);
-    }
+    this.xAxisStrip = new Rectangle(0, viewHeight, viewWidth, options.xAxisStripHeight, {
+      fill: "transparent",
+      cursor: "ew-resize",
+    });
+    this.yAxisStrip = new Rectangle(-Y_AXIS_STRIP_WIDTH, 0, Y_AXIS_STRIP_WIDTH, viewHeight, {
+      fill: "transparent",
+      cursor: "ns-resize",
+    });
+
+    this.children = [
+      this.chartRectangle,
+      this.plotLayer,
+      xTicks,
+      yTicks,
+      yTickLabels,
+      this.xTickLabels,
+      this.xAxisStrip,
+      this.yAxisStrip,
+    ];
 
     this.xAxisLabel = new Text("", { font: LABEL_FONT, fill: DataLabColors.textColorProperty, maxWidth: viewWidth });
     this.yAxisLabel = new Text("", {
@@ -148,6 +174,12 @@ export class ChartFrameNode extends Node {
     layout();
     this.xAxisLabel.boundsProperty.lazyLink(layout);
     this.yAxisLabel.boundsProperty.lazyLink(layout);
+  }
+
+  /** Shows or hides the numbers and the label under the x axis (hidden when a graph below shares the axis). */
+  public setXLabelsVisible(visible: boolean): void {
+    this.xTickLabels.visible = visible;
+    this.xAxisLabel.visible = visible;
   }
 
   /** Sets both axis ranges and picks tick spacings to suit them. */
@@ -176,17 +208,4 @@ export class ChartFrameNode extends Node {
     this.chartTransform.setModelYRange(yRange);
     applySpacing(false);
   }
-}
-
-/** A range padded by `fraction` on each side; a zero-width range is opened up around its value. */
-export function paddedRange(min: number, max: number, fraction: number): Range {
-  if (!(Number.isFinite(min) && Number.isFinite(max))) {
-    return new Range(0, 1);
-  }
-  if (min === max) {
-    const halfWidth = min === 0 ? 1 : Math.abs(min) * 0.5;
-    return new Range(min - halfWidth, max + halfWidth);
-  }
-  const padding = (max - min) * fraction;
-  return new Range(min - padding, max + padding);
 }

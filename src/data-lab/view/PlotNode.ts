@@ -9,27 +9,31 @@
  * neighbouring data point, Shift+←/→ move it a hundredth of the axis, Page Up/Down
  * move ten points, Home/End go to the ends of the data.
  *
- * The range lives in data units in the model, so zooming never changes which rows
- * are used.
+ * Zoom and pan (see GraphGestures): wheel or pinch on the plot, wheel or drag on an
+ * axis, Shift+drag on the plot. The range lives in data units in the model, so
+ * zooming never changes which rows are used.
  */
 
 import { Multilink, type TReadOnlyProperty } from "scenerystack/axon";
-import { clamp, Matrix3, type Range } from "scenerystack/dot";
+import { clamp, Matrix3 } from "scenerystack/dot";
 import { Shape } from "scenerystack/kite";
 import { DragListener, KeyboardListener, Line, Node, Path, Rectangle } from "scenerystack/scenery";
 import { columnLabel } from "../../common/model/Dataset.js";
+import type { XRange } from "../../common/model/includedRows.js";
 import { evaluateFit } from "../../common/model/leastSquares.js";
-import { ChartFrameNode, paddedRange } from "../../common/view/ChartFrameNode.js";
+import { ChartFrameNode } from "../../common/view/ChartFrameNode.js";
+import { installGraphGestures } from "../../common/view/GraphGestures.js";
 import { PointsCanvasNode } from "../../common/view/PointsCanvasNode.js";
 import DataLabColors from "../../DataLabColors.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
+import type { GraphView } from "./GraphView.js";
 
 /** Samples along the fitted curve; plenty for a parabola across a few hundred pixels. */
 const CURVE_SAMPLES = 120;
 
-/** Fraction of the y extent left empty above and below the points. */
-const Y_PADDING = 0.08;
+/** Height of the strip under the plot that takes x-axis gestures: the gap down to the residual graph. */
+const X_AXIS_STRIP_HEIGHT = 20;
 
 /** Half-width of the invisible strip that makes an edge easy to grab, mouse or finger. */
 const HANDLE_HALF_WIDTH = 11;
@@ -49,12 +53,13 @@ export class PlotNode extends Node {
   public readonly rangeStartHandle: Node;
   public readonly rangeEndHandle: Node;
 
-  public constructor(model: DataLabModel, xAxisRangeProperty: TReadOnlyProperty<Range>, options: PlotNodeOptions) {
+  public constructor(model: DataLabModel, graphView: GraphView, options: PlotNodeOptions) {
     super();
     const { viewWidth, viewHeight } = options;
     const a11y = StringManager.getInstance().getDataLabA11yStrings();
 
-    const frame = new ChartFrameNode({ viewWidth, viewHeight, showXTickLabels: false });
+    const frame = new ChartFrameNode({ viewWidth, viewHeight, xAxisStripHeight: X_AXIS_STRIP_HEIGHT });
+    const xAxisRangeProperty = graphView.xAxisRangeProperty;
     this.frame = frame;
     frame.chartRectangle.cursor = "crosshair";
     const chartTransform = frame.chartTransform;
@@ -78,6 +83,28 @@ export class PlotNode extends Node {
       return chartTransform.viewToModelX(viewX);
     };
 
+    // A second finger turns a one-finger range gesture into a pinch: the gesture is
+    // interrupted and the range goes back to what it was when the gesture began.
+    const rangeListeners: DragListener[] = [];
+    let rangeBeforeGesture: XRange | null = null;
+    let isRangeGesture = false;
+    const beginRangeGesture = () => {
+      rangeBeforeGesture = model.rangeProperty.value;
+      isRangeGesture = true;
+    };
+    const endRangeGesture = () => {
+      isRangeGesture = false;
+    };
+    const abandonRangeGesture = () => {
+      if (isRangeGesture) {
+        for (const listener of rangeListeners) {
+          listener.interrupt();
+        }
+        model.rangeProperty.value = rangeBeforeGesture;
+        isRangeGesture = false;
+      }
+    };
+
     // ── Edge handles ─────────────────────────────────────────────────────────
     const createHandle = (accessibleName: TReadOnlyProperty<string>, isStart: boolean) => {
       const handle = new Node({
@@ -99,15 +126,17 @@ export class PlotNode extends Node {
       // The bound this handle does not own stays put for the whole gesture, so the
       // two edges can cross without the drag jumping to the other one.
       let anchor = 0;
-      handle.addInputListener(
-        new DragListener({
-          start: () => {
-            const range = model.rangeProperty.value;
-            anchor = range ? (isStart ? range.max : range.min) : 0;
-          },
-          drag: (event) => model.setRange(anchor, xFromPointer(event.pointer.point)),
-        }),
-      );
+      const handleListener = new DragListener({
+        start: () => {
+          beginRangeGesture();
+          const range = model.rangeProperty.value;
+          anchor = range ? (isStart ? range.max : range.min) : 0;
+        },
+        drag: (event) => model.setRange(anchor, xFromPointer(event.pointer.point)),
+        end: endRangeGesture,
+      });
+      rangeListeners.push(handleListener);
+      handle.addInputListener(handleListener);
 
       const moveTo = (x: number) => {
         const range = model.rangeProperty.value;
@@ -177,36 +206,63 @@ export class PlotNode extends Node {
     this.rangeEndHandle = rangeEndHandle;
 
     // ── Sweep a new range across empty plot area ──────────────────────────────
+    // With Shift held, the same drag pans both axes instead.
     let sweepStart = 0;
-    frame.chartRectangle.addInputListener(
-      new DragListener({
-        start: (event) => {
+    let isPanning = false;
+    let panStart = { x: 0, y: 0 };
+    let panXRange = graphView.xAxisRangeProperty.value;
+    let panYRange = graphView.yAxisRangeProperty.value;
+    const sweepListener = new DragListener({
+      start: (event) => {
+        isPanning = event.domEvent instanceof MouseEvent && event.domEvent.shiftKey;
+        if (isPanning) {
+          panStart = frame.globalToLocalPoint(event.pointer.point);
+          panXRange = graphView.xAxisRangeProperty.value;
+          panYRange = graphView.yAxisRangeProperty.value;
+        } else {
+          beginRangeGesture();
           sweepStart = xFromPointer(event.pointer.point);
-        },
-        drag: (event) => model.setRange(sweepStart, xFromPointer(event.pointer.point)),
-      }),
-    );
+        }
+      },
+      drag: (event) => {
+        if (isPanning) {
+          const point = frame.globalToLocalPoint(event.pointer.point);
+          graphView.panX(panXRange, (-(point.x - panStart.x) * panXRange.getLength()) / viewWidth);
+          graphView.panY(panYRange, ((point.y - panStart.y) * panYRange.getLength()) / viewHeight);
+        } else {
+          model.setRange(sweepStart, xFromPointer(event.pointer.point));
+        }
+      },
+      end: endRangeGesture,
+    });
+    rangeListeners.push(sweepListener);
+    frame.chartRectangle.addInputListener(sweepListener);
 
     // ── Drag the band to move the whole range ─────────────────────────────────
     let grabOffset = 0;
     let grabWidth = 0;
-    band.addInputListener(
-      new DragListener({
-        start: (event) => {
-          const range = model.rangeProperty.value;
-          if (range) {
-            grabOffset = xFromPointer(event.pointer.point) - range.min;
-            grabWidth = range.max - range.min;
-          }
-        },
-        drag: (event) => {
-          const min = xFromPointer(event.pointer.point) - grabOffset;
-          model.setRange(min, min + grabWidth);
-        },
-      }),
-    );
+    const bandListener = new DragListener({
+      start: (event) => {
+        beginRangeGesture();
+        const range = model.rangeProperty.value;
+        if (range) {
+          grabOffset = xFromPointer(event.pointer.point) - range.min;
+          grabWidth = range.max - range.min;
+        }
+      },
+      drag: (event) => {
+        const min = xFromPointer(event.pointer.point) - grabOffset;
+        model.setRange(min, min + grabWidth);
+      },
+      end: endRangeGesture,
+    });
+    rangeListeners.push(bandListener);
+    band.addInputListener(bandListener);
 
     this.children = [frame, rangeStartHandle, rangeEndHandle];
+
+    // ── Zoom and pan ──────────────────────────────────────────────────────────
+    installGraphGestures(frame, this, graphView, { zoomsY: true, onPinchStart: abandonRangeGesture });
 
     // ── Updates ───────────────────────────────────────────────────────────────
     const updateRange = () => {
@@ -259,28 +315,20 @@ export class PlotNode extends Node {
     const updateAxes = () => {
       const xColumn = model.xColumnProperty.value;
       const yColumn = model.yColumnProperty.value;
-      const xRange = xAxisRangeProperty.value;
-      const xs = xColumn?.values ?? [];
-      const ys = yColumn?.values ?? [];
-
-      let min = Number.POSITIVE_INFINITY;
-      let max = Number.NEGATIVE_INFINITY;
-      const count = Math.min(xs.length, ys.length);
-      for (let i = 0; i < count; i++) {
-        const x = xs[i] as number;
-        const y = ys[i] as number;
-        if (Number.isFinite(x) && Number.isFinite(y) && x >= xRange.min && x <= xRange.max) {
-          min = Math.min(min, y);
-          max = Math.max(max, y);
-        }
-      }
-      frame.setRanges(xRange, paddedRange(min, max, Y_PADDING));
+      frame.setRanges(graphView.xAxisRangeProperty.value, graphView.yAxisRangeProperty.value);
+      frame.xAxisLabel.string = xColumn ? columnLabel(xColumn) : "";
       frame.yAxisLabel.string = yColumn ? columnLabel(yColumn) : "";
-      points.setPoints(xs, ys, model.inclusionProperty.value.flags);
+      points.setPoints(xColumn?.values ?? [], yColumn?.values ?? [], model.inclusionProperty.value.flags);
     };
 
     Multilink.multilink(
-      [model.xColumnProperty, model.yColumnProperty, model.inclusionProperty, xAxisRangeProperty],
+      [
+        model.xColumnProperty,
+        model.yColumnProperty,
+        model.inclusionProperty,
+        graphView.xAxisRangeProperty,
+        graphView.yAxisRangeProperty,
+      ],
       () => {
         updateAxes();
         updateRange();

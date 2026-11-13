@@ -6,16 +6,21 @@
  * a curve or a trend here says the model is wrong, whatever R² reads.
  */
 
-import { Multilink, type TReadOnlyProperty } from "scenerystack/axon";
+import { Multilink } from "scenerystack/axon";
 import { Range } from "scenerystack/dot";
 import { Line, Node } from "scenerystack/scenery";
 import { columnLabel } from "../../common/model/Dataset.js";
 import { withUnit } from "../../common/model/formatFit.js";
 import { ChartFrameNode } from "../../common/view/ChartFrameNode.js";
+import { installGraphGestures } from "../../common/view/GraphGestures.js";
 import { PointsCanvasNode } from "../../common/view/PointsCanvasNode.js";
 import DataLabColors from "../../DataLabColors.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
+import type { GraphView } from "./GraphView.js";
+
+/** Height of the strip under the plot that takes x-axis gestures: tick labels and axis label. */
+const X_AXIS_STRIP_HEIGHT = 38;
 
 /** Headroom above the largest residual, as a multiple of it. */
 const Y_HEADROOM = 1.25;
@@ -26,16 +31,18 @@ export type ResidualPlotNodeOptions = {
 };
 
 export class ResidualPlotNode extends Node {
-  public constructor(
-    model: DataLabModel,
-    xAxisRangeProperty: TReadOnlyProperty<Range>,
-    options: ResidualPlotNodeOptions,
-  ) {
+  public constructor(model: DataLabModel, graphView: GraphView, options: ResidualPlotNodeOptions) {
     super();
     const { viewWidth, viewHeight } = options;
     const labels = StringManager.getInstance().getLabels();
 
-    const frame = new ChartFrameNode({ viewWidth, viewHeight, yTickCount: 3 });
+    const frame = new ChartFrameNode({
+      viewWidth,
+      viewHeight,
+      yTickCount: 3,
+      xAxisStripHeight: X_AXIS_STRIP_HEIGHT,
+    });
+    const xAxisRangeProperty = graphView.xAxisRangeProperty;
     const chartTransform = frame.chartTransform;
     const zeroLine = new Line(0, 0, viewWidth, 0, {
       stroke: DataLabColors.fitLineColorProperty,
@@ -45,6 +52,9 @@ export class ResidualPlotNode extends Node {
     frame.plotLayer.addChild(zeroLine);
     frame.plotLayer.addChild(points);
     this.addChild(frame);
+
+    // The y axis always fits the residuals, so wheel and pinch here act on x alone.
+    installGraphGestures(frame, this, graphView, { zoomsY: false });
 
     Multilink.multilink(
       [model.fitProperty, xAxisRangeProperty, labels.residualsStringProperty],

@@ -20,7 +20,7 @@
     "rangeTo": "à",
     "clearRange": "Effacer l'intervalle",
     "zoomToRange": "Zoom sur l'intervalle",
-    "showAll": "Tout afficher",
+    "autoScale": "Échelle automatique",
     "residuals": "Résidus",
     "results": "Résultats de l'ajustement",
     "inFit": "Dans l'ajustement",
@@ -41,7 +41,7 @@
     "pasteHint": "Copiez des cellules dans un tableur, puis appuyez sur Ctrl+V ici.",
     "copied": "Résultats copiés.",
     "localOnly": "Vos données restent dans ce navigateur.",
-    "dragHint": "Faites glisser sur le graphique pour sélectionner un intervalle."
+    "dragHint": "Faites glisser sur le graphique pour sélectionner un intervalle. Molette ou pincement pour zoomer ; faites glisser un axe pour déplacer."
   },
   "a11y": {
     "dataLab": {

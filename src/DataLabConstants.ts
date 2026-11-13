@@ -51,6 +51,9 @@ export const RESIDUAL_PLOT_HEIGHT = 110;
 /** Fraction of the data's x extent left empty at each side of the graph. */
 export const X_AXIS_PADDING = 0.04;
 
+/** Fraction of the visible points' y extent left empty above and below them. */
+export const Y_AXIS_PADDING = 0.08;
+
 /** Fraction of the selected range left visible at each side after "Zoom to range". */
 export const ZOOM_PADDING = 0.15;
 
@@ -77,6 +80,7 @@ DataLabNamespace.register("DataLabConstants", {
   RESIDUAL_PLOT_GAP,
   RESIDUAL_PLOT_HEIGHT,
   X_AXIS_PADDING,
+  Y_AXIS_PADDING,
   ZOOM_PADDING,
   RIGHT_COLUMN_WIDTH,
   SELECT_WIDTH,

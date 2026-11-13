@@ -10,8 +10,7 @@
  * HTML elements mounted through Scenery's DOM node; everything else is Scenery.
  */
 
-import { DerivedProperty, Multilink, Property, StringProperty } from "scenerystack/axon";
-import type { Range } from "scenerystack/dot";
+import { Multilink, type Property, StringProperty } from "scenerystack/axon";
 import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
 import { DOM, HBox, Node, Text, VBox } from "scenerystack/scenery";
 import { PhetFont, ResetAllButton } from "scenerystack/scenery-phet";
@@ -27,7 +26,6 @@ import { columnLabel, isNumericColumn, parseNumber } from "../../common/model/Da
 import { exportCsv } from "../../common/model/exportCsv.js";
 import { FIT_MODELS } from "../../common/model/formatFit.js";
 import type { FitModelValue } from "../../common/model/leastSquares.js";
-import { paddedRange } from "../../common/view/ChartFrameNode.js";
 import { downloadText, installDropTarget, openTextFile } from "../../common/view/fileIO.js";
 import DataLabColors from "../../DataLabColors.js";
 import {
@@ -45,8 +43,6 @@ import {
   SELECT_WIDTH,
   TABLE_HEIGHT,
   TABLE_WIDTH,
-  X_AXIS_PADDING,
-  ZOOM_PADDING,
 } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabPreferencesModel } from "../../preferences/DataLabPreferencesModel.js";
@@ -55,6 +51,7 @@ import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
 import { fillPattern } from "./fillPattern.js";
 import { createFitTextProperty, fitSummary, modelNameProperties } from "./fitText.js";
+import { GraphView } from "./GraphView.js";
 import { PlotNode } from "./PlotNode.js";
 import { ResidualPlotNode } from "./ResidualPlotNode.js";
 import { ResultsPanel } from "./ResultsPanel.js";
@@ -66,8 +63,8 @@ const NOTE_FONT = new PhetFont(11);
 const HTML_FONT = `${CONTROL_FONT_SIZE}px Arial, sans-serif`;
 
 export class DataLabScreenView extends ScreenView {
-  /** The visible x interval, or null to show all the data. */
-  private readonly xViewRangeProperty = new Property<Range | null>(null);
+  /** The visible x and y intervals; created in the constructor, once the model is known. */
+  private readonly graphView: GraphView;
 
   /** A short notice about the last import, paste or copy; "" when there is nothing to say. */
   private readonly messageProperty = new StringProperty("");
@@ -85,6 +82,8 @@ export class DataLabScreenView extends ScreenView {
       providedOptions,
     );
     super(options);
+
+    this.graphView = new GraphView(model);
 
     const labels = StringManager.getInstance().getLabels();
     const a11y = StringManager.getInstance().getDataLabA11yStrings();
@@ -107,7 +106,7 @@ export class DataLabScreenView extends ScreenView {
       const imported = model.importText(text, (position) =>
         fillPattern(labels.defaultColumnNameStringProperty.value, { position }),
       );
-      this.xViewRangeProperty.value = null;
+      this.graphView.autoScale();
       this.messageProperty.value = imported ? "" : labels.importFailedStringProperty.value;
     };
     installDropTarget(importText);
@@ -140,7 +139,7 @@ export class DataLabScreenView extends ScreenView {
     });
     const sampleButton = createButton(labels.sampleDataStringProperty, () => {
       model.loadSample();
-      this.xViewRangeProperty.value = null;
+      this.graphView.autoScale();
       this.messageProperty.value = "";
     });
     const importButtons = new HBox({ spacing: 6, children: [openButton, pasteButton, sampleButton] });
@@ -168,32 +167,12 @@ export class DataLabScreenView extends ScreenView {
     this.addChild(leftColumn);
 
     // ── Graphs ────────────────────────────────────────────────────────────────
-    const xAxisRangeProperty = new DerivedProperty(
-      [this.xViewRangeProperty, model.xColumnProperty, model.yColumnProperty],
-      (viewRange, xColumn, yColumn) => {
-        if (viewRange) {
-          return viewRange;
-        }
-        let min = Number.POSITIVE_INFINITY;
-        let max = Number.NEGATIVE_INFINITY;
-        xColumn?.values.forEach((x, i) => {
-          if (Number.isFinite(x) && Number.isFinite(yColumn?.values[i])) {
-            min = Math.min(min, x);
-            max = Math.max(max, x);
-          }
-        });
-        return paddedRange(min, max, X_AXIS_PADDING);
-      },
-    );
-    model.xColumnIndexProperty.lazyLink(() => {
-      this.xViewRangeProperty.value = null;
-    });
-
-    const plot = new PlotNode(model, xAxisRangeProperty, { viewWidth: PLOT_WIDTH, viewHeight: PLOT_HEIGHT });
+    const graphView = this.graphView;
+    const plot = new PlotNode(model, graphView, { viewWidth: PLOT_WIDTH, viewHeight: PLOT_HEIGHT });
     // Position by the plot rectangle, not by bounds that change with the tick labels.
     plot.x = PLOT_LEFT;
     plot.y = bounds.minY + SCREEN_VIEW_MARGIN + 4;
-    const residualPlot = new ResidualPlotNode(model, xAxisRangeProperty, {
+    const residualPlot = new ResidualPlotNode(model, graphView, {
       viewWidth: PLOT_WIDTH,
       viewHeight: RESIDUAL_PLOT_HEIGHT,
     });
@@ -201,8 +180,10 @@ export class DataLabScreenView extends ScreenView {
     residualPlot.y = plot.y + PLOT_HEIGHT + RESIDUAL_PLOT_GAP;
     this.addChild(plot);
     this.addChild(residualPlot);
+    // The two graphs share an x axis; its numbers are printed under the lower one.
     preferences.showResidualsProperty.link((showResiduals) => {
       residualPlot.visible = showResiduals;
+      plot.frame.setXLabelsVisible(!showResiduals);
     });
 
     // ── Range fields ──────────────────────────────────────────────────────────
@@ -256,18 +237,16 @@ export class DataLabScreenView extends ScreenView {
     const zoomButton = createButton(labels.zoomToRangeStringProperty, () => {
       const range = model.rangeProperty.value;
       if (range) {
-        this.xViewRangeProperty.value = paddedRange(range.min, range.max, ZOOM_PADDING);
+        graphView.zoomToRange(range);
       }
     });
-    const showAllButton = createButton(labels.showAllStringProperty, () => {
-      this.xViewRangeProperty.value = null;
-    });
+    const autoScaleButton = createButton(labels.autoScaleStringProperty, () => graphView.autoScale());
     model.rangeProperty.link((range) => {
       clearRangeButton.enabled = range !== null;
       zoomButton.enabled = range !== null;
     });
-    this.xViewRangeProperty.link((viewRange) => {
-      showAllButton.enabled = viewRange !== null;
+    graphView.isAutoScaledProperty.link((isAutoScaled) => {
+      autoScaleButton.enabled = !isAutoScaled;
     });
 
     const rangeRow = new HBox({
@@ -280,7 +259,7 @@ export class DataLabScreenView extends ScreenView {
         unitText,
       ],
     });
-    const rangeButtons = new HBox({ spacing: 6, children: [clearRangeButton, zoomButton, showAllButton] });
+    const rangeButtons = new HBox({ spacing: 6, children: [clearRangeButton, zoomButton, autoScaleButton] });
 
     const statusText = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH + 40 });
     fitTextProperty.link((fitText) => {
@@ -408,7 +387,7 @@ export class DataLabScreenView extends ScreenView {
           plot.rangeEndHandle,
           clearRangeButton,
           zoomButton,
-          showAllButton,
+          autoScaleButton,
           modelRadioButtons,
           copyButton,
           resetAllButton,
@@ -419,7 +398,7 @@ export class DataLabScreenView extends ScreenView {
 
   /** Resets view-side state. The table is kept; see DataLabModel.reset(). */
   public reset(): void {
-    this.xViewRangeProperty.reset();
+    this.graphView.autoScale();
     this.messageProperty.reset();
   }
 }
