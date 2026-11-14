@@ -13,9 +13,11 @@
 import { DerivedProperty, NumberProperty, Property, type TReadOnlyProperty } from "scenerystack/axon";
 import type { TModel } from "scenerystack/joist";
 import {
+  addColumn,
   addRow,
   type Column,
   type Dataset,
+  deleteColumn,
   deleteRow,
   isNumericColumn,
   pasteBlock,
@@ -43,6 +45,8 @@ export class DataLabModel implements TModel {
   public readonly yColumnProperty: TReadOnlyProperty<Column | null>;
   public readonly inclusionProperty: TReadOnlyProperty<Inclusion>;
   public readonly fitProperty: TReadOnlyProperty<FitResult>;
+
+  private reindexingXAxis = false;
 
   public constructor() {
     this.datasetProperty = new Property<Dataset>(parseTable(sampleCsv).dataset);
@@ -72,7 +76,9 @@ export class DataLabModel implements TModel {
 
     // A range is in the units of the x column, so it does not survive a change of x column.
     this.xColumnIndexProperty.lazyLink(() => {
-      this.rangeProperty.value = null;
+      if (!this.reindexingXAxis) {
+        this.clearRange();
+      }
     });
   }
 
@@ -93,7 +99,7 @@ export class DataLabModel implements TModel {
   }
 
   public setCell(rowIndex: number, columnIndex: number, text: string): void {
-    this.datasetProperty.value = setCell(this.datasetProperty.value, rowIndex, columnIndex, text);
+    this.updateDataset(setCell(this.datasetProperty.value, rowIndex, columnIndex, text));
   }
 
   public setColumnHeader(columnIndex: number, name: string, unit: string): void {
@@ -101,7 +107,7 @@ export class DataLabModel implements TModel {
   }
 
   public pasteBlock(rowIndex: number, columnIndex: number, block: readonly (readonly string[])[]): void {
-    this.datasetProperty.value = pasteBlock(this.datasetProperty.value, rowIndex, columnIndex, block);
+    this.updateDataset(pasteBlock(this.datasetProperty.value, rowIndex, columnIndex, block));
   }
 
   public addRow(): void {
@@ -109,7 +115,54 @@ export class DataLabModel implements TModel {
   }
 
   public deleteRow(rowIndex: number): void {
-    this.datasetProperty.value = deleteRow(this.datasetProperty.value, rowIndex);
+    this.updateDataset(deleteRow(this.datasetProperty.value, rowIndex));
+  }
+
+  public addColumn(name: string): void {
+    this.datasetProperty.value = addColumn(this.datasetProperty.value, name);
+  }
+
+  public deleteColumn(columnIndex: number): void {
+    const dataset = this.datasetProperty.value;
+    if (dataset.columns.length <= 1) {
+      return;
+    }
+    const next = deleteColumn(dataset, columnIndex);
+    if (next === dataset) {
+      return;
+    }
+
+    const shiftedIndex = (index: number) => (index === columnIndex ? -1 : index > columnIndex ? index - 1 : index);
+    this.updateDataset(
+      next,
+      shiftedIndex(this.xColumnIndexProperty.value),
+      shiftedIndex(this.yColumnIndexProperty.value),
+    );
+  }
+
+  /** Keep the selected axes when possible, otherwise fall back to a numeric column. */
+  private updateDataset(
+    dataset: Dataset,
+    xIndex = this.xColumnIndexProperty.value,
+    yIndex = this.yColumnIndexProperty.value,
+  ): void {
+    const numeric = dataset.columns
+      .map((column, index) => (isNumericColumn(column) ? index : -1))
+      .filter((i) => i >= 0);
+    const keepX = numeric.includes(xIndex);
+    const nextX = keepX ? xIndex : (numeric[0] ?? -1);
+    const nextY = numeric.includes(yIndex) ? yIndex : (numeric.find((i) => i !== nextX) ?? nextX);
+    if (!keepX) {
+      this.clearRange();
+    }
+    this.datasetProperty.value = dataset;
+    this.reindexingXAxis = keepX;
+    try {
+      this.xColumnIndexProperty.value = nextX;
+    } finally {
+      this.reindexingXAxis = false;
+    }
+    this.yColumnIndexProperty.value = nextY;
   }
 
   /** Sets the range from two bounds in either order. */

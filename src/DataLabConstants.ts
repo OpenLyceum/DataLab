@@ -66,6 +66,7 @@ export const RANGE_FIELD_WIDTH = 78;
 // ── Export ────────────────────────────────────────────────────────────────────
 
 export const EXPORT_FILE_NAME = "data-lab.csv";
+export const GRAPH_EXPORT_FILE_NAME = "data-lab.png";
 
 DataLabNamespace.register("DataLabConstants", {
   SCREEN_VIEW_MARGIN,
@@ -86,4 +87,5 @@ DataLabNamespace.register("DataLabConstants", {
   SELECT_WIDTH,
   RANGE_FIELD_WIDTH,
   EXPORT_FILE_NAME,
+  GRAPH_EXPORT_FILE_NAME,
 });

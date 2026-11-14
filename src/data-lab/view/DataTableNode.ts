@@ -30,6 +30,7 @@ const MIN_CELL_WIDTH = 86;
 const SCROLLBAR_ALLOWANCE = 18;
 const MARKER_WIDTH = 22;
 const ROW_NUMBER_WIDTH = 30;
+const REMOVE_BUTTON_WIDTH = 23;
 const CELL_PADDING = "3px 5px";
 const CHECK_MARK = "✓";
 
@@ -96,11 +97,25 @@ export class DataTableNode extends Node {
       }
     };
 
+    const removeButton = (name: string, action: () => void) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "×";
+      button.title = name;
+      button.setAttribute("aria-label", name);
+      button.style.cssText = `min-width: ${REMOVE_BUTTON_WIDTH}px; font: ${FONT};`;
+      button.addEventListener("click", action);
+      return button;
+    };
+
     const build = (dataset: Dataset) => {
       const colors = css();
       const rowCount = Math.min(dataset.rowCount, MAX_RENDERED_ROWS);
-      const available = options.width - MARKER_WIDTH - ROW_NUMBER_WIDTH - SCROLLBAR_ALLOWANCE;
-      cellWidth = Math.max(MIN_CELL_WIDTH, Math.floor(available / Math.max(dataset.columns.length, 1)));
+      const available = options.width - MARKER_WIDTH - ROW_NUMBER_WIDTH - REMOVE_BUTTON_WIDTH - SCROLLBAR_ALLOWANCE;
+      cellWidth = Math.max(
+        MIN_CELL_WIDTH,
+        Math.floor(available / Math.max(dataset.columns.length, 1)) - REMOVE_BUTTON_WIDTH,
+      );
       wrapper.style.background = colors.surface;
       wrapper.style.border = `1px solid ${colors.grid}`;
       thead.replaceChildren();
@@ -124,7 +139,11 @@ export class DataTableNode extends Node {
       numberHeader.setAttribute("aria-label", labels.rowStringProperty.value);
       numberHeader.scope = "col";
       numberHeader.style.cssText = `${headerCellStyle} width: ${ROW_NUMBER_WIDTH}px;`;
-      headerRow.append(markerHeader, numberHeader);
+      const actionsHeader = document.createElement("th");
+      actionsHeader.scope = "col";
+      actionsHeader.style.cssText = headerCellStyle;
+      actionsHeader.setAttribute("aria-label", labels.deleteRowStringProperty.value);
+      headerRow.append(markerHeader, numberHeader, actionsHeader);
 
       dataset.columns.forEach((_column, c) => {
         const th = document.createElement("th");
@@ -147,7 +166,17 @@ export class DataTableNode extends Node {
           }
         });
         headerInputs.push(input);
-        th.appendChild(input);
+        th.style.whiteSpace = "nowrap";
+        const remove = removeButton(
+          fillPattern(a11y.controls.deleteColumnStringProperty.value, { position: c + 1 }),
+          () => {
+            // Read the current size after the synchronous rebuild and keep focus in the table.
+            model.deleteColumn(c);
+            headerInputs[Math.min(c, headerInputs.length - 1)]?.focus();
+          },
+        );
+        remove.disabled = dataset.columns.length === 1;
+        th.append(input, remove);
         headerRow.appendChild(th);
       });
       thead.appendChild(headerRow);
@@ -161,7 +190,19 @@ export class DataTableNode extends Node {
         number.scope = "row";
         number.textContent = String(r + 1);
         number.style.cssText = `${cellStyle} text-align: right; padding: ${CELL_PADDING}; font-weight: normal; color: ${colors.text}; background: ${colors.header};`;
-        tr.append(marker, number);
+        const actions = document.createElement("td");
+        actions.style.cssText = cellStyle;
+        actions.appendChild(
+          removeButton(fillPattern(a11y.controls.deleteRowStringProperty.value, { row: r + 1 }), () => {
+            model.deleteRow(r);
+            if (cellInputs.length === 0) {
+              headerInputs[0]?.focus();
+            } else {
+              focusCell(Math.min(r, cellInputs.length - 1), 0);
+            }
+          }),
+        );
+        tr.append(marker, number, actions);
         const rowInputs: HTMLInputElement[] = [];
         dataset.columns.forEach((_column, c) => {
           const td = document.createElement("td");
@@ -277,6 +318,9 @@ export class DataTableNode extends Node {
         a11y.controls.dataTableStringProperty,
         a11y.controls.cellStringProperty,
         a11y.controls.columnHeaderStringProperty,
+        a11y.controls.deleteColumnStringProperty,
+        a11y.controls.deleteRowStringProperty,
+        labels.deleteRowStringProperty,
       ],
       rebuild,
     );

@@ -103,6 +103,19 @@ export function deleteRow(dataset: Dataset, rowIndex: number): Dataset {
   };
 }
 
+/** Appends a blank column without reinterpreting the existing cells. */
+export function addColumn(dataset: Dataset, name: string): Dataset {
+  const texts = Array.from({ length: dataset.rowCount }, () => "");
+  return { ...dataset, columns: [...dataset.columns, createColumn(name, "", texts)] };
+}
+
+export function deleteColumn(dataset: Dataset, columnIndex: number): Dataset {
+  if (!dataset.columns[columnIndex]) {
+    return dataset;
+  }
+  return { ...dataset, columns: dataset.columns.filter((_, i) => i !== columnIndex) };
+}
+
 /**
  * Writes a pasted block of cells into the table starting at (rowIndex, columnIndex),
  * adding rows as needed. Cells that fall to the right of the last column are dropped.

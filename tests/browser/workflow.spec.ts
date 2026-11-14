@@ -302,3 +302,73 @@ test("pasting a table outside a text field replaces the data", async ({ page }) 
   expect(results).toContain("Points used: 4");
   expect(results).toMatch(/^m = .* s\/m$/m);
 });
+
+test("table structure edits keep the fit tied to the surviving columns", async ({ page }) => {
+  await open(page);
+  await setRange(page, "1.5", "3");
+  await pressButton(page, "Add column");
+  await expect(page.getByLabel("Name and unit of column 3")).toHaveValue("Column 3");
+
+  // Fit against the original columns after removing a preceding, unselected column.
+  await page.getByLabel("Column on the x axis").selectOption("1");
+  await page.getByLabel("Column on the y axis").selectOption("1");
+  await setRange(page, "0", "2");
+  const before = await copiedResults(page);
+  await page.getByLabel("Delete column 1", { exact: true }).click();
+  await expect(page.getByLabel("Column on the x axis")).toHaveValue("0");
+  await expect(page.getByLabel("Range maximum")).toHaveValue("2");
+  expect(await copiedResults(page)).toBe(before);
+
+  await page.getByLabel("Delete row 1", { exact: true }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(60);
+  await expect(page.getByRole("status")).toContainText("of 60 rows");
+  await page.getByLabel("Delete column 1", { exact: true }).click();
+  await expect(page.getByLabel("Range maximum")).toHaveValue("");
+  await expect(page.getByLabel("Delete column 1", { exact: true })).toBeDisabled();
+
+  const cell = page.locator("tbody tr").first().locator("input");
+  await cell.fill("2");
+  await cell.press("Enter");
+  await expect(page.getByLabel("Column on the x axis")).toHaveValue("0");
+  await expect(page.getByRole("status")).toContainText("Using 1 of 60 rows");
+});
+
+test("graph export downloads an opaque PNG with axes and data", async ({ page }) => {
+  await open(page);
+  await setRange(page, "1.5", "3");
+  const downloadEvent = page.waitForEvent("download");
+  await pressButton(page, "Export PNG");
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("data-lab.png");
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const png = readFileSync(path as string);
+  expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const image = await page.evaluate(async (base64) => {
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Canvas unavailable");
+    }
+    context.drawImage(bitmap, 0, 0);
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      opaqueCorner: context.getImageData(0, 0, 1, 1).data[3] === 255,
+      hasDataPoint: context
+        .getImageData(0, 0, bitmap.width, bitmap.height)
+        .data.some(
+          (red, index, pixels) =>
+            index % 4 === 0 && red === 79 && pixels[index + 1] === 195 && pixels[index + 2] === 247,
+        ),
+    };
+  }, png.toString("base64"));
+  expect(image.width).toBeGreaterThan(385);
+  expect(image.height).toBeGreaterThan(380);
+  expect(image.opaqueCorner).toBe(true);
+  expect(image.hasDataPoint).toBe(true);
+});

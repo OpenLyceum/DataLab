@@ -81,8 +81,8 @@ strings under `a11y.dataLab` in each locale.
 - Inclusion is never shown by color alone: included points are filled and excluded ones hollow;
   included table rows carry a check mark as well as a tint.
 - **Known gap:** the HTML controls (table, column choosers, range fields) live in the visual DOM
-  layer, not the PDOM, so they are reachable by Tab but sit outside `pdomOrder`, and the status
-  line is not yet announced through a live region. See the roadmap.
+  layer, not the PDOM, so they are reachable by Tab but sit outside `pdomOrder`. The fit status
+  has a PDOM live region. See the roadmap for the remaining reading-order work.
 
 ## Compliance carve-outs
 

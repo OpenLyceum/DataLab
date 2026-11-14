@@ -8,7 +8,10 @@
     "pasteTable": "Paste table",
     "sampleData": "Sample data",
     "addRow": "Add row",
+    "addColumn": "Add column",
+    "deleteRow": "Delete row",
     "exportCsv": "Export CSV",
+    "exportPng": "Export PNG",
     "copySummary": "Copy results",
     "xAxis": "x axis",
     "yAxis": "y axis",
@@ -63,6 +66,8 @@
         "xColumn": "Column on the x axis",
         "yColumn": "Column on the y axis",
         "columnHeader": "Name and unit of column {{position}}",
+        "deleteRow": "Delete row {{row}}",
+        "deleteColumn": "Delete column {{position}}",
         "cell": "{{column}}, row {{row}}"
       },
       "keyboardHelp": {

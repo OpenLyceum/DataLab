@@ -59,7 +59,12 @@ export function installDropTarget(handler: TextHandler): () => void {
 
 /** Saves `text` as a file through the browser's download mechanism. */
 export function downloadText(text: string, fileName: string, mimeType: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: mimeType }));
+  downloadBlob(new Blob([text], { type: mimeType }), fileName);
+}
+
+/** Saves a locally generated file. */
+export function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;

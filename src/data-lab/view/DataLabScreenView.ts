@@ -26,12 +26,13 @@ import { columnLabel, isNumericColumn, parseNumber } from "../../common/model/Da
 import { exportCsv } from "../../common/model/exportCsv.js";
 import { FIT_MODELS } from "../../common/model/formatFit.js";
 import type { FitModelValue } from "../../common/model/leastSquares.js";
-import { downloadText, installDropTarget, openTextFile } from "../../common/view/fileIO.js";
+import { downloadBlob, downloadText, installDropTarget, openTextFile } from "../../common/view/fileIO.js";
 import DataLabColors from "../../DataLabColors.js";
 import {
   COLUMN_SPACING,
   CONTROL_FONT_SIZE,
   EXPORT_FILE_NAME,
+  GRAPH_EXPORT_FILE_NAME,
   PLOT_HEIGHT,
   PLOT_LEFT,
   PLOT_WIDTH,
@@ -147,6 +148,12 @@ export class DataLabScreenView extends ScreenView {
     // ── Table ─────────────────────────────────────────────────────────────────
     const table = new DataTableNode(model, { width: TABLE_WIDTH, height: TABLE_HEIGHT });
     const addRowButton = createButton(labels.addRowStringProperty, () => model.addRow());
+    const addColumnButton = createButton(labels.addColumnStringProperty, () => {
+      const name = fillPattern(labels.defaultColumnNameStringProperty.value, {
+        position: model.datasetProperty.value.columns.length + 1,
+      });
+      model.addColumn(name);
+    });
     const exportButton = createButton(labels.exportCsvStringProperty, () => {
       const csv = exportCsv(model.datasetProperty.value, {
         xColumnIndex: model.xColumnIndexProperty.value,
@@ -155,7 +162,7 @@ export class DataLabScreenView extends ScreenView {
       });
       downloadText(csv, EXPORT_FILE_NAME, "text/csv;charset=utf-8;");
     });
-    const tableButtons = new HBox({ spacing: 6, children: [addRowButton, exportButton] });
+    const tableButtons = new HBox({ spacing: 6, children: [addRowButton, addColumnButton, exportButton] });
 
     const leftColumn = new VBox({
       align: "left",
@@ -178,12 +185,31 @@ export class DataLabScreenView extends ScreenView {
     });
     residualPlot.x = PLOT_LEFT;
     residualPlot.y = plot.y + PLOT_HEIGHT + RESIDUAL_PLOT_GAP;
-    this.addChild(plot);
-    this.addChild(residualPlot);
+    const graphs = new Node({ children: [plot, residualPlot], excludeInvisibleChildrenFromBounds: true });
+    this.addChild(graphs);
     // The two graphs share an x axis; its numbers are printed under the lower one.
     preferences.showResidualsProperty.link((showResiduals) => {
       residualPlot.visible = showResiduals;
       plot.frame.setXLabelsVisible(!showResiduals);
+    });
+
+    const exportGraphButton = createButton(labels.exportPngStringProperty, () => {
+      const background = DataLabColors.backgroundColorProperty.value.toCSS();
+      graphs.toCanvas((canvas) => {
+        const context = canvas.getContext("2d");
+        if (!context) {
+          return;
+        }
+        context.globalCompositeOperation = "destination-over";
+        context.resetTransform();
+        context.fillStyle = background;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            downloadBlob(blob, GRAPH_EXPORT_FILE_NAME);
+          }
+        });
+      });
     });
 
     // ── Range fields ──────────────────────────────────────────────────────────
@@ -262,8 +288,14 @@ export class DataLabScreenView extends ScreenView {
     const rangeButtons = new HBox({ spacing: 6, children: [clearRangeButton, zoomButton, autoScaleButton] });
 
     const statusText = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH + 40 });
+    const liveStatus = new Node({ tagName: "div", ariaRole: "status" });
+    liveStatus.setPDOMAttribute("aria-live", "polite");
+    liveStatus.setPDOMAttribute("aria-atomic", "true");
     fitTextProperty.link((fitText) => {
-      statusText.string = fitText.status;
+      if (statusText.string !== fitText.status) {
+        statusText.string = fitText.status;
+        liveStatus.innerContent = fitText.status;
+      }
     });
     const messageText = new Text("", { font: NOTE_FONT, fill: DataLabColors.textColorProperty, maxWidth: PLOT_WIDTH });
     Multilink.multilink(
@@ -356,7 +388,7 @@ export class DataLabScreenView extends ScreenView {
     const rightColumn = new VBox({
       align: "left",
       spacing: COLUMN_SPACING,
-      children: [controlPanel, resultsPanel, copyButton],
+      children: [controlPanel, resultsPanel, new HBox({ spacing: 6, children: [copyButton, exportGraphButton] })],
       top: bounds.minY + SCREEN_VIEW_MARGIN,
     });
     rightColumn.left = bounds.maxX - SCREEN_VIEW_MARGIN - RIGHT_COLUMN_WIDTH;
@@ -375,6 +407,7 @@ export class DataLabScreenView extends ScreenView {
     this.addChild(resetAllButton);
 
     // ── Keyboard / reading order ──────────────────────────────────────────────
+    this.addChild(liveStatus);
     this.addChild(
       new Node({
         pdomOrder: [
@@ -382,14 +415,17 @@ export class DataLabScreenView extends ScreenView {
           pasteButton,
           sampleButton,
           addRowButton,
+          addColumnButton,
           exportButton,
           plot.rangeStartHandle,
           plot.rangeEndHandle,
           clearRangeButton,
           zoomButton,
           autoScaleButton,
+          liveStatus,
           modelRadioButtons,
           copyButton,
+          exportGraphButton,
           resetAllButton,
         ],
       }),

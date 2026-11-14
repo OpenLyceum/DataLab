@@ -37,6 +37,8 @@ Table details worth knowing:
 
 - The DOM is rebuilt only when the row or column count changes; otherwise cell
   text is patched in place and the focused input is left alone.
+- Each row has a delete button and each column header has a remove button. The
+  table keeps at least one column so students can continue entering data.
 - A cell commits on `change` (blur or Enter). Enter and ↓ move down, ↑ moves up,
   Escape restores the model's text.
 - A paste containing a tab or newline is treated as a block and written through
@@ -87,18 +89,15 @@ the valid points.
 Done: scaffold; CSV, paste and drag-and-drop import; units from headers; editable
 table; column choosers; range by drag, handles, keyboard and numeric fields;
 proportional, linear and quadratic fits with standard errors, RMSE and R²;
-residual graph; CSV export; copy results; zoom to range; wheel and pinch zoom,
-pan and auto scale on both axes.
+residual graph; CSV and graph PNG export; copy results; zoom to range; wheel
+and pinch zoom, pan and auto scale on both axes; add and delete rows and
+columns; fit status live region; GitHub repository, fleet catalog entry, screenshot and icon.
 
 Remaining for 0.1:
 
-- PNG export of the graph.
-- Announce the status line through a live region; bring the HTML controls into
-  the reading order.
-- Delete-row control; column add/remove.
+- Bring the HTML controls into the reading order.
 - Check the table in Firefox, Safari, on an iPad and with a screen reader
   (only Chromium has been exercised).
-- Fleet onboarding: GitHub repo, catalog entry, screenshot, icon.
 
 0.2: weighted fits, error bars and reduced χ²; calculated columns; per-row
 exclusion; pinned fits (two ranges at once); inverse, inverse-square and cubic

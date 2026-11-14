@@ -8,7 +8,10 @@
     "pasteTable": "Coller un tableau",
     "sampleData": "Données d'exemple",
     "addRow": "Ajouter une ligne",
+    "addColumn": "Ajouter une colonne",
+    "deleteRow": "Supprimer une ligne",
     "exportCsv": "Exporter en CSV",
+    "exportPng": "Exporter en PNG",
     "copySummary": "Copier les résultats",
     "xAxis": "axe x",
     "yAxis": "axe y",
@@ -63,6 +66,8 @@
         "xColumn": "Colonne sur l'axe x",
         "yColumn": "Colonne sur l'axe y",
         "columnHeader": "Nom et unité de la colonne {{position}}",
+        "deleteRow": "Supprimer la ligne {{row}}",
+        "deleteColumn": "Supprimer la colonne {{position}}",
         "cell": "{{column}}, ligne {{row}}"
       },
       "keyboardHelp": {
