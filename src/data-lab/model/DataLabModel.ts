@@ -21,6 +21,7 @@ import {
   deleteRow,
   isNumericColumn,
   pasteBlock,
+  setCalculatedColumn,
   setCell,
   setColumnHeader,
   setRowExcluded,
@@ -152,6 +153,16 @@ export class DataLabModel implements TModel {
 
   public addColumn(name: string): void {
     this.datasetProperty.value = addColumn(this.datasetProperty.value, name);
+  }
+
+  public setCalculatedColumn(index: number, name: string, unit: string, formula: string): boolean {
+    const dataset = this.datasetProperty.value;
+    const next = setCalculatedColumn(dataset, index, name, unit, formula);
+    if (next === dataset) {
+      return false;
+    }
+    this.updateDataset(next);
+    return true;
   }
 
   public deleteColumn(columnIndex: number): void {

@@ -16,11 +16,12 @@
 
 import { Multilink } from "scenerystack/axon";
 import { DOM, Node } from "scenerystack/scenery";
-import { columnLabel, type Dataset } from "../../common/model/Dataset.js";
+import { canDeleteColumn, columnLabel, type Dataset } from "../../common/model/Dataset.js";
 import { splitHeader, tokenize } from "../../common/model/parseTable.js";
 import DataLabColors from "../../DataLabColors.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
+import { editCalculatedColumn } from "./editCalculatedColumn.js";
 import { fillPattern } from "./fillPattern.js";
 
 const FONT = "12px Arial, sans-serif";
@@ -65,6 +66,8 @@ export class DataTableNode extends Node {
 
     let renderedRowCount = -1;
     let renderedColumnCount = -1;
+    let formulaButtons = new Map<number, HTMLButtonElement>();
+    let removeColumns: HTMLButtonElement[] = [];
     let headerInputs: HTMLInputElement[] = [];
     let cellInputs: HTMLInputElement[][] = [];
     let rows: HTMLTableRowElement[] = [];
@@ -124,6 +127,8 @@ export class DataTableNode extends Node {
       thead.replaceChildren();
       tbody.replaceChildren();
       headerInputs = [];
+      removeColumns = [];
+      formulaButtons = new Map();
       cellInputs = [];
       rows = [];
       markers = [];
@@ -153,7 +158,7 @@ export class DataTableNode extends Node {
       exclusionHeader.textContent = labels.excludeStringProperty.value;
       headerRow.append(markerHeader, numberHeader, actionsHeader, exclusionHeader);
 
-      dataset.columns.forEach((_column, c) => {
+      dataset.columns.forEach((column, c) => {
         const th = document.createElement("th");
         th.scope = "col";
         th.style.cssText = headerCellStyle;
@@ -183,8 +188,17 @@ export class DataTableNode extends Node {
             headerInputs[Math.min(c, headerInputs.length - 1)]?.focus();
           },
         );
-        remove.disabled = dataset.columns.length === 1;
+        removeColumns.push(remove);
         th.append(input, remove);
+        if (column.formula !== undefined) {
+          const edit = document.createElement("button");
+          edit.type = "button";
+          edit.textContent = "ƒx";
+          edit.title = labels.editFormulaStringProperty.value;
+          formulaButtons.set(c, edit);
+          edit.addEventListener("click", () => editCalculatedColumn(model, c));
+          th.append(edit);
+        }
         headerRow.appendChild(th);
       });
       thead.appendChild(headerRow);
@@ -244,7 +258,7 @@ export class DataTableNode extends Node {
           input.addEventListener("paste", (event) => {
             const text = event.clipboardData?.getData("text/plain") ?? "";
             // A single value pastes into the cell as usual; a block fills the table.
-            if (/[\t\n]/.test(text.trim())) {
+            if (!input.readOnly && /[\t\n]/.test(text.trim())) {
               event.preventDefault();
               const block = tokenize(text.replace(/\r\n?/g, "\n").replace(/\n+$/, ""), "\t");
               model.pasteBlock(r, c, block);
@@ -273,6 +287,17 @@ export class DataTableNode extends Node {
       });
       caption.textContent = a11y.controls.dataTableStringProperty.value;
       dataset.columns.forEach((column, c) => {
+        formulaButtons
+          .get(c)
+          ?.setAttribute("aria-label", `${labels.editFormulaStringProperty.value} · ${columnLabel(column)}`);
+        const remove = removeColumns[c];
+        if (remove) {
+          const blocked = !canDeleteColumn(dataset, c);
+          remove.disabled = blocked || dataset.columns.length === 1;
+          remove.title = blocked
+            ? labels.formulaDependencyStringProperty.value
+            : (remove.getAttribute("aria-label") ?? "");
+        }
         const header = headerInputs[c];
         if (header && header !== document.activeElement) {
           header.value = columnLabel(column);
@@ -283,7 +308,8 @@ export class DataTableNode extends Node {
             return;
           }
           const text = column.texts[r] ?? "";
-          if (input !== document.activeElement && input.value !== text) {
+          input.readOnly = column.formula !== undefined;
+          if ((input.readOnly || input !== document.activeElement) && input.value !== text) {
             input.value = text;
           }
           const isInvalid = text !== "" && !Number.isFinite(column.values[r]);
@@ -342,6 +368,8 @@ export class DataTableNode extends Node {
         a11y.controls.deleteRowStringProperty,
         labels.deleteRowStringProperty,
         labels.excludeStringProperty,
+        labels.editFormulaStringProperty,
+        labels.formulaDependencyStringProperty,
         a11y.controls.excludeRowStringProperty,
       ],
       rebuild,

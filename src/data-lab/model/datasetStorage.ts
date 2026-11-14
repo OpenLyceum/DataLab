@@ -1,6 +1,6 @@
 /** Local recovery for the last committed table on this browser and origin. */
 
-import type { Column, Dataset } from "../../common/model/Dataset.js";
+import { type Column, type Dataset, recalculateColumns } from "../../common/model/Dataset.js";
 
 const STORAGE_KEY = "openlyceum.data-lab.table.v1";
 
@@ -15,6 +15,7 @@ function isStoredColumn(value: unknown, rowCount: number): value is StoredColumn
   return (
     typeof column["name"] === "string" &&
     typeof column["unit"] === "string" &&
+    (column["formula"] === undefined || typeof column["formula"] === "string") &&
     Array.isArray(column["texts"]) &&
     column["texts"].length === rowCount &&
     column["texts"].every((text: unknown) => typeof text === "string") &&
@@ -44,11 +45,11 @@ export function restoreDataset(): Dataset | null {
     ) {
       return null;
     }
-    return {
+    return recalculateColumns({
       rowCount,
       columns: columns.map((column) => ({ ...column, values: column.values.map((value) => value ?? Number.NaN) })),
       excludedRows: [...new Set(excludedRows)],
-    };
+    });
   } catch {
     return null;
   }

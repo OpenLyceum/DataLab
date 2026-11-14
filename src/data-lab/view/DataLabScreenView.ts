@@ -50,6 +50,7 @@ import type { DataLabPreferencesModel } from "../../preferences/DataLabPreferenc
 import type { DataLabModel } from "../model/DataLabModel.js";
 import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
+import { editCalculatedColumn } from "./editCalculatedColumn.js";
 import { fillPattern } from "./fillPattern.js";
 import { createFitTextProperty, fitSummary, modelNameProperties } from "./fitText.js";
 import { GraphView } from "./GraphView.js";
@@ -154,6 +155,7 @@ export class DataLabScreenView extends ScreenView {
       });
       model.addColumn(name);
     });
+    const calculatedButton = createButton(labels.calculatedColumnStringProperty, () => editCalculatedColumn(model));
     const exportButton = createButton(labels.exportCsvStringProperty, () => {
       const csv = exportCsv(model.datasetProperty.value, {
         xColumnIndex: model.xColumnIndexProperty.value,
@@ -167,7 +169,7 @@ export class DataLabScreenView extends ScreenView {
     const leftColumn = new VBox({
       align: "left",
       spacing: 8,
-      children: [importButtons, table, tableButtons],
+      children: [importButtons, table, tableButtons, calculatedButton],
       left: bounds.minX + SCREEN_VIEW_MARGIN,
       top: bounds.minY + SCREEN_VIEW_MARGIN,
     });
@@ -435,6 +437,7 @@ export class DataLabScreenView extends ScreenView {
           sampleButton,
           addRowButton,
           addColumnButton,
+          calculatedButton,
           exportButton,
           plot.rangeStartHandle,
           plot.rangeEndHandle,

@@ -108,7 +108,12 @@ and exclusions. The fit range and zoom start at their defaults on reload.
 Also done for 0.2: weighted fits with a y-uncertainty column, vertical error bars,
 and reduced χ².
 
-Remaining for 0.2: calculated columns;
+Calculated columns accept arithmetic, powers and common functions. Formulas
+reference earlier columns by position (`C1`, `C2`, …), recalculate after table
+edits, and survive reload. Calculated cells are read-only and export as values.
+A source column stays protected while a formula references it.
+
+Remaining for 0.2:
 pinned fits (two ranges at once); log axes.
 
 0.3: nonlinear models (Levenberg–Marquardt); multiple runs; session files;

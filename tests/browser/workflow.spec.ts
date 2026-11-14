@@ -436,3 +436,25 @@ test("a y uncertainty column enables weighting and flags unusable uncertainties"
   await uncertainty.selectOption("-1");
   expect(await includedRowCount(page)).toBe(4);
 });
+
+test("calculated columns can be edited, fitted, and restored", async ({ page }) => {
+  await open(page);
+  await pressButton(page, "Calculated column");
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Column name").fill("Scaled time");
+  await dialog.getByLabel("Unit (optional)").fill("s");
+  await dialog.getByLabel("Formula", { exact: true }).fill("2*C1");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toHaveCount(0);
+  const calculated = page.getByLabel("Scaled time (s), row 3", { exact: true });
+  await expect(calculated).toHaveValue("0.2");
+  await expect(calculated).not.toBeEditable();
+  await page.getByLabel("Column on the y axis").selectOption("2");
+  expect(parameter(await copiedResults(page), "m")).toBeCloseTo(2);
+  await page.getByLabel("Edit formula · Scaled time (s)", { exact: true }).click();
+  await dialog.getByLabel("Formula", { exact: true }).fill("3*C1");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect.poll(async () => Number(await calculated.inputValue())).toBeCloseTo(0.3);
+  await open(page);
+  await expect.poll(async () => Number(await calculated.inputValue())).toBeCloseTo(0.3);
+});
