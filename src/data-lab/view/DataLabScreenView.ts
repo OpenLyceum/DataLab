@@ -315,7 +315,11 @@ export class DataLabScreenView extends ScreenView {
     this.addChild(belowPlots);
 
     // ── Column choosers ───────────────────────────────────────────────────────
-    const createSelect = (accessibleName: typeof a11y.controls.xColumnStringProperty, property: Property<number>) => {
+    const createSelect = (
+      accessibleName: typeof a11y.controls.xColumnStringProperty,
+      property: Property<number>,
+      emptyLabel?: typeof labels.unweightedStringProperty,
+    ) => {
       const select = document.createElement("select");
       select.style.cssText = `width: ${SELECT_WIDTH}px; box-sizing: border-box; font: ${HTML_FONT}; padding: 2px;`;
       accessibleName.link((name) => select.setAttribute("aria-label", name));
@@ -324,8 +328,14 @@ export class DataLabScreenView extends ScreenView {
       });
       const fill = () => {
         select.replaceChildren();
+        if (emptyLabel) {
+          const option = document.createElement("option");
+          option.value = "-1";
+          option.textContent = emptyLabel.value;
+          select.appendChild(option);
+        }
         model.datasetProperty.value.columns.forEach((column, index) => {
-          if (isNumericColumn(column)) {
+          if (isNumericColumn(column) || index === property.value) {
             const option = document.createElement("option");
             option.value = String(index);
             option.textContent = columnLabel(column);
@@ -336,10 +346,17 @@ export class DataLabScreenView extends ScreenView {
       };
       model.datasetProperty.link(fill);
       property.lazyLink(fill);
+      emptyLabel?.lazyLink(fill);
       return new DOM(select, { allowInput: true });
     };
     const xSelect = createSelect(a11y.controls.xColumnStringProperty, model.xColumnIndexProperty);
     const ySelect = createSelect(a11y.controls.yColumnStringProperty, model.yColumnIndexProperty);
+
+    const uncertaintySelect = createSelect(
+      labels.uncertaintyColumnStringProperty,
+      model.uncertaintyColumnIndexProperty,
+      labels.unweightedStringProperty,
+    );
 
     // ── Fit model ─────────────────────────────────────────────────────────────
     const modelNames = modelNameProperties();
@@ -368,6 +385,8 @@ export class DataLabScreenView extends ScreenView {
           xSelect,
           heading(labels.yAxisStringProperty),
           ySelect,
+          heading(labels.uncertaintyColumnStringProperty),
+          uncertaintySelect,
           heading(labels.fitModelStringProperty),
           modelRadioButtons,
         ],

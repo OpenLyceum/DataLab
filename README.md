@@ -13,6 +13,7 @@ residuals. Data stays in the browser. The last edited table is restored on reloa
 - Editable data table with row and column controls; rows used by the fit are marked, and individual rows can be excluded
 - Select a range of x by dragging on the graph, moving its edges with the pointer or keyboard, or typing the bounds
 - Proportional, linear, quadratic, cubic, inverse and inverse-square least-squares fits with parameter uncertainties, units, RMSE and R²
+- Optional y-uncertainty column for weighted fits, vertical error bars, and reduced χ²
 - Residual graph on the same x axis
 - Zoom with the wheel or a pinch, pan by dragging an axis, and return with Auto scale; zooming never changes a fit
 - Export a CSV with `in_fit`, `fit_value` and `residual` columns, save the visible graphs as a PNG, or copy the fit results as text

@@ -95,3 +95,16 @@ The residuals and RMSE remain in the original y units. Measurements whose
 reciprocal predictor is undefined remain in the table and scatter plot.
 The fit and residual plot omit those rows, and CSV leaves both prediction
 and residual blank for them.
+
+## Weighted fits
+
+The optional y-uncertainty column contains positive standard uncertainties in
+the same units as y. Each design row and its y value are scaled by
+`min(σ) / σᵢ` before QR, which gives the same solution as weights `1 / σᵢ²`.
+Rows with missing, zero or negative uncertainties do not enter a weighted fit.
+The graph draws y ± σ where the uncertainty is valid.
+
+Parameter uncertainties use the supplied σ as absolute standard deviations.
+They are not scaled by the reduced χ². Reduced χ² is the sum of squared
+standardized residuals divided by n − p, and is reported only when n > p.
+RMSE and exported residuals stay in y units.

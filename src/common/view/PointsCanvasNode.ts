@@ -10,6 +10,7 @@ import type { ChartTransform } from "scenerystack/bamboo";
 import { Bounds2 } from "scenerystack/dot";
 import { CanvasNode } from "scenerystack/scenery";
 import DataLabColors from "../../DataLabColors.js";
+import { validUncertainty } from "../model/leastSquares.js";
 
 const POINT_RADIUS = 3;
 const HOLLOW_LINE_WIDTH = 1;
@@ -17,6 +18,7 @@ const HOLLOW_LINE_WIDTH = 1;
 export class PointsCanvasNode extends CanvasNode {
   private xs: readonly number[] = [];
   private ys: readonly number[] = [];
+  private uncertainties: readonly number[] = [];
   private included: readonly boolean[] = [];
   private readonly chartTransform: ChartTransform;
 
@@ -30,10 +32,16 @@ export class PointsCanvasNode extends CanvasNode {
   }
 
   /** `included[i]` says whether point i is filled. Non-finite points are not drawn. */
-  public setPoints(xs: readonly number[], ys: readonly number[], included: readonly boolean[]): void {
+  public setPoints(
+    xs: readonly number[],
+    ys: readonly number[],
+    included: readonly boolean[],
+    uncertainties: readonly number[] = [],
+  ): void {
     this.xs = xs;
     this.ys = ys;
     this.included = included;
+    this.uncertainties = uncertainties;
     this.invalidatePaint();
   }
 
@@ -51,6 +59,19 @@ export class PointsCanvasNode extends CanvasNode {
       }
       const viewX = this.chartTransform.modelToViewX(x);
       const viewY = this.chartTransform.modelToViewY(y);
+      const sigma = this.uncertainties[i];
+      if (validUncertainty(sigma) && Number.isFinite(y + sigma) && Number.isFinite(y - sigma)) {
+        const top = this.chartTransform.modelToViewY(y + sigma);
+        const bottom = this.chartTransform.modelToViewY(y - sigma);
+        context.beginPath();
+        context.moveTo(viewX, top);
+        context.lineTo(viewX, bottom);
+        context.moveTo(viewX - POINT_RADIUS, top);
+        context.lineTo(viewX + POINT_RADIUS, top);
+        context.moveTo(viewX - POINT_RADIUS, bottom);
+        context.lineTo(viewX + POINT_RADIUS, bottom);
+        context.stroke();
+      }
       if (
         viewX < minX - POINT_RADIUS ||
         viewX > maxX + POINT_RADIUS ||

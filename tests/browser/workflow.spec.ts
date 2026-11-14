@@ -418,3 +418,21 @@ test("inverse fits skip zero and leave its prediction blank in CSV", async ({ pa
   const [download] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
   expect(readFileSync(await download.path(), "utf8").split("\n")[3]).toBe("0,99,0,,");
 });
+
+test("a y uncertainty column enables weighting and flags unusable uncertainties", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Time (s),Position (m),Sigma (m)\n0,1,1\n1,2,1\n2,5,2\n3,6,0");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  const uncertainty = page.getByLabel("Y uncertainty (σ)", { exact: true });
+  await uncertainty.selectOption("2");
+  await expect(page.getByRole("status")).toContainText("1 skipped (invalid y uncertainty)");
+  const summary = await copiedResults(page);
+  expect(summary).toContain("Points used: 3");
+  expect(summary).toContain("Reduced χ² = 0.4444");
+  expect(await includedRowCount(page)).toBe(3);
+  await uncertainty.selectOption("-1");
+  expect(await includedRowCount(page)).toBe(4);
+});

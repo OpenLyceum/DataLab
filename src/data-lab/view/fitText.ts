@@ -82,6 +82,11 @@ function statusText(model: DataLabModel, labels: Labels): string {
   if (inclusion.unsupportedCount > 0) {
     notes.push(fillPattern(labels.statusUnsupportedStringProperty.value, { count: inclusion.unsupportedCount }));
   }
+  if (inclusion.invalidUncertaintyCount > 0) {
+    notes.push(
+      fillPattern(labels.statusInvalidUncertaintyStringProperty.value, { count: inclusion.invalidUncertaintyCount }),
+    );
+  }
   return notes.join(" · ");
 }
 
@@ -98,6 +103,11 @@ function successLines(fit: FitSuccess, xUnit: string, yUnit: string, labels: Lab
       fillPattern(labels.rmseStringProperty.value, { value: withUnit(formatSignificant(fit.rmse, 3), yUnit) }),
     );
   }
+  if (fit.reducedChiSquared !== null) {
+    lines.push(
+      fillPattern(labels.reducedChiSquaredStringProperty.value, { value: formatSignificant(fit.reducedChiSquared) }),
+    );
+  }
   if (fit.rSquared !== null) {
     lines.push(
       fillPattern(labels.rSquaredStringProperty.value, { value: formatSignificant(fit.rSquared, R_SQUARED_DIGITS) }),
@@ -109,12 +119,18 @@ function successLines(fit: FitSuccess, xUnit: string, yUnit: string, labels: Lab
 
 function cautionText(fit: FitSuccess, labels: Labels): string {
   if (fit.degreesOfFreedom === 0) {
+    if (fit.standardErrors !== null) {
+      return "";
+    }
     return labels.noScatterStringProperty.value;
   }
   return fit.degreesOfFreedom < CAUTION_DEGREES_OF_FREEDOM ? labels.fewPointsStringProperty.value : "";
 }
 
 function failureLine(fit: FitFailure, labels: Labels): string {
+  if (fit.reason === FitFailureReason.INVALID_UNCERTAINTY) {
+    return fillPattern(labels.statusInvalidUncertaintyStringProperty.value, { count: fit.count });
+  }
   if (fit.reason === FitFailureReason.UNSUPPORTED_X) {
     return fillPattern(labels.statusUnsupportedStringProperty.value, { count: fit.count });
   }
@@ -141,6 +157,8 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       labels.statusAllStringProperty,
       labels.statusRangeStringProperty,
       labels.statusSkippedStringProperty,
+      labels.statusInvalidUncertaintyStringProperty,
+      labels.reducedChiSquaredStringProperty,
       labels.statusUnsupportedStringProperty,
       labels.pointsUsedStringProperty,
       labels.rmseStringProperty,

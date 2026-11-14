@@ -235,3 +235,30 @@ describe("additional regression models", () => {
     });
   });
 });
+
+describe("weighted least squares", () => {
+  it("matches the analytic weighted linear solution and known-sigma covariance", () => {
+    const fit = fitModel(FitModel.LINEAR, [0, 1, 2], [1, 2, 5], [1, 1, 2]);
+    expect(fit.ok).toBe(true);
+    if (fit.ok) {
+      expect(fit.parameters[0]).toBeCloseTo(5 / 3, 12);
+      expect(fit.parameters[1]).toBeCloseTo(7 / 9, 12);
+      expect(fit.standardErrors?.[0]).toBeCloseTo(1, 12);
+      expect(fit.standardErrors?.[1]).toBeCloseTo(Math.sqrt(8 / 9), 12);
+      expect(fit.reducedChiSquared).toBeCloseTo(4 / 9, 12);
+      expect(fit.rSquared).toBeNull();
+    }
+  });
+
+  it("retains measurement-based parameter errors at zero degrees of freedom", () => {
+    const fit = fitModel(FitModel.LINEAR, [0, 1], [1, 2], [1, 2]);
+    expect(fit).toMatchObject({ ok: true, degreesOfFreedom: 0, reducedChiSquared: null });
+    if (fit.ok) {
+      expect(fit.standardErrors?.[0]).toBeCloseTo(Math.sqrt(5), 12);
+    }
+    expect(fitModel(FitModel.LINEAR, [0, 1], [1, 2], [0, 1])).toMatchObject({
+      ok: false,
+      reason: FitFailureReason.INVALID_UNCERTAINTY,
+    });
+  });
+});

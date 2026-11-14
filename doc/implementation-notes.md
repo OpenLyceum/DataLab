@@ -105,7 +105,10 @@ constant offset. Undefined reciprocal x values are skipped and reported. Exclusi
 graph, fit, residuals and CSV export. Recovery includes committed cells, headers
 and exclusions. The fit range and zoom start at their defaults on reload.
 
-Remaining for 0.2: weighted fits, error bars and reduced χ²; calculated columns;
+Also done for 0.2: weighted fits with a y-uncertainty column, vertical error bars,
+and reduced χ².
+
+Remaining for 0.2: calculated columns;
 pinned fits (two ranges at once); log axes.
 
 0.3: nonlinear models (Levenberg–Marquardt); multiple runs; session files;

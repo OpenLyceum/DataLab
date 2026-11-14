@@ -338,7 +338,12 @@ export class PlotNode extends Node {
       frame.setRanges(graphView.xAxisRangeProperty.value, graphView.yAxisRangeProperty.value);
       frame.xAxisLabel.string = xColumn ? columnLabel(xColumn) : "";
       frame.yAxisLabel.string = yColumn ? columnLabel(yColumn) : "";
-      points.setPoints(xColumn?.values ?? [], yColumn?.values ?? [], model.inclusionProperty.value.flags);
+      points.setPoints(
+        xColumn?.values ?? [],
+        yColumn?.values ?? [],
+        model.inclusionProperty.value.flags,
+        model.uncertaintyColumnProperty.value?.values,
+      );
     };
 
     Multilink.multilink(
@@ -346,6 +351,7 @@ export class PlotNode extends Node {
         model.xColumnProperty,
         model.yColumnProperty,
         model.inclusionProperty,
+        model.uncertaintyColumnProperty,
         graphView.xAxisRangeProperty,
         graphView.yAxisRangeProperty,
       ],

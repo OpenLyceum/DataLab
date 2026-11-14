@@ -13,9 +13,15 @@
 import { DerivedProperty, Property, type TReadOnlyProperty } from "scenerystack/axon";
 import type { Range } from "scenerystack/dot";
 import type { XRange } from "../../common/model/includedRows.js";
+import { validUncertainty } from "../../common/model/leastSquares.js";
 import { paddedRange, panBy, zoomAbout } from "../../common/view/axisRange.js";
 import { X_AXIS_PADDING, Y_AXIS_PADDING, ZOOM_PADDING } from "../../DataLabConstants.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
+
+function withError(value: number, error: number): number {
+  const bound = value + error;
+  return Number.isFinite(bound) ? bound : value;
+}
 
 export class GraphView {
   /** The x interval set by zooming or panning, or null to show all the data. */
@@ -35,6 +41,7 @@ export class GraphView {
     const extent = (pick: "x" | "y", within: Range | null): Range => {
       const xs = model.xColumnProperty.value?.values ?? [];
       const ys = model.yColumnProperty.value?.values ?? [];
+      const uncertainties = pick === "y" ? model.uncertaintyColumnProperty.value?.values : undefined;
       let min = Number.POSITIVE_INFINITY;
       let max = Number.NEGATIVE_INFINITY;
       const count = Math.min(xs.length, ys.length);
@@ -43,8 +50,10 @@ export class GraphView {
         const y = ys[i] as number;
         if (Number.isFinite(x) && Number.isFinite(y) && (within === null || (x >= within.min && x <= within.max))) {
           const value = pick === "x" ? x : y;
-          min = Math.min(min, value);
-          max = Math.max(max, value);
+          const sigma = uncertainties?.[i];
+          const error = validUncertainty(sigma) ? sigma : 0;
+          min = Math.min(min, withError(value, -error));
+          max = Math.max(max, withError(value, error));
         }
       }
       return paddedRange(min, max, pick === "x" ? X_AXIS_PADDING : Y_AXIS_PADDING);
@@ -55,7 +64,13 @@ export class GraphView {
       (viewRange) => viewRange ?? extent("x", null),
     );
     this.yAxisRangeProperty = new DerivedProperty(
-      [this.yViewRangeProperty, this.xAxisRangeProperty, model.xColumnProperty, model.yColumnProperty],
+      [
+        this.yViewRangeProperty,
+        this.xAxisRangeProperty,
+        model.xColumnProperty,
+        model.yColumnProperty,
+        model.uncertaintyColumnProperty,
+      ],
       (viewRange, xRange) => viewRange ?? extent("y", xRange),
     );
     this.isAutoScaledProperty = new DerivedProperty(

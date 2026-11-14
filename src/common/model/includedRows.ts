@@ -10,7 +10,7 @@
  * than a first and last row.
  */
 
-import { type FitModelValue, supportsFitX } from "./leastSquares.js";
+import { type FitModelValue, supportsFitX, validUncertainty } from "./leastSquares.js";
 
 /** A selected x interval in data units. `min` ≤ `max`. */
 export type XRange = {
@@ -26,6 +26,7 @@ export type Inclusion = {
   /** Rows left out because x or y is blank or not a number. */
   readonly skippedCount: number;
   readonly unsupportedCount: number;
+  readonly invalidUncertaintyCount: number;
   /** Rows with a numeric x and y, whether or not they are in range. */
   readonly validCount: number;
 };
@@ -41,6 +42,7 @@ export function includedRows(
   range: XRange | null,
   excludedRows: readonly number[] = [],
   model?: FitModelValue,
+  uncertainties?: readonly number[],
 ): Inclusion {
   const excluded = new Set(excludedRows);
   const rowCount = Math.min(xs.length, ys.length);
@@ -48,6 +50,7 @@ export function includedRows(
   const flags: boolean[] = new Array<boolean>(rowCount).fill(false);
   let skippedCount = 0;
   let unsupportedCount = 0;
+  let invalidUncertaintyCount = 0;
   for (let i = 0; i < rowCount; i++) {
     const x = xs[i] as number;
     const y = ys[i] as number;
@@ -58,9 +61,20 @@ export function includedRows(
         unsupportedCount++;
         continue;
       }
+      if (uncertainties && !validUncertainty(uncertainties[i])) {
+        invalidUncertaintyCount++;
+        continue;
+      }
       indices.push(i);
       flags[i] = true;
     }
   }
-  return { indices, flags, skippedCount, unsupportedCount, validCount: rowCount - skippedCount };
+  return {
+    indices,
+    flags,
+    skippedCount,
+    unsupportedCount,
+    invalidUncertaintyCount,
+    validCount: rowCount - skippedCount,
+  };
 }

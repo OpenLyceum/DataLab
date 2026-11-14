@@ -38,6 +38,9 @@ export class DataLabModel implements TModel {
   public readonly xColumnIndexProperty = new NumberProperty(-1);
   public readonly yColumnIndexProperty = new NumberProperty(-1);
 
+  public readonly uncertaintyColumnIndexProperty = new NumberProperty(-1);
+  public readonly uncertaintyColumnProperty: TReadOnlyProperty<Column | null>;
+
   /** The selected x interval in data units, or null to use every valid row. */
   public readonly rangeProperty = new Property<XRange | null>(null);
 
@@ -58,15 +61,27 @@ export class DataLabModel implements TModel {
     this.xColumnProperty = new DerivedProperty([this.datasetProperty, this.xColumnIndexProperty], columnAt);
     this.yColumnProperty = new DerivedProperty([this.datasetProperty, this.yColumnIndexProperty], columnAt);
 
+    this.uncertaintyColumnProperty = new DerivedProperty(
+      [this.datasetProperty, this.uncertaintyColumnIndexProperty],
+      columnAt,
+    );
+
     const noExclusions: readonly number[] = [];
     const excludedRowsProperty = new DerivedProperty(
       [this.datasetProperty],
       (dataset) => dataset.excludedRows ?? noExclusions,
     );
     this.inclusionProperty = new DerivedProperty(
-      [this.xColumnProperty, this.yColumnProperty, this.rangeProperty, excludedRowsProperty, this.fitModelProperty],
-      (xColumn, yColumn, range, excludedRows, model) =>
-        includedRows(xColumn?.values ?? [], yColumn?.values ?? [], range, excludedRows, model),
+      [
+        this.xColumnProperty,
+        this.yColumnProperty,
+        this.rangeProperty,
+        excludedRowsProperty,
+        this.fitModelProperty,
+        this.uncertaintyColumnProperty,
+      ],
+      (xColumn, yColumn, range, excludedRows, model, uncertainty) =>
+        includedRows(xColumn?.values ?? [], yColumn?.values ?? [], range, excludedRows, model, uncertainty?.values),
     );
 
     this.fitProperty = new DerivedProperty(
@@ -74,10 +89,12 @@ export class DataLabModel implements TModel {
       (inclusion, model): FitResult => {
         const xValues = this.xColumnProperty.value?.values ?? [];
         const yValues = this.yColumnProperty.value?.values ?? [];
+        const sigma = this.uncertaintyColumnProperty.value?.values;
         return fitModel(
           model,
           inclusion.indices.map((i) => xValues[i] as number),
           inclusion.indices.map((i) => yValues[i] as number),
+          sigma && inclusion.indices.map((i) => sigma[i] as number),
         );
       },
     );
@@ -99,6 +116,7 @@ export class DataLabModel implements TModel {
       return false;
     }
     this.rangeProperty.value = null;
+    this.uncertaintyColumnIndexProperty.reset();
     this.datasetProperty.value = dataset;
     this.chooseDefaultColumns();
     return true;
@@ -147,6 +165,7 @@ export class DataLabModel implements TModel {
     }
 
     const shiftedIndex = (index: number) => (index === columnIndex ? -1 : index > columnIndex ? index - 1 : index);
+    this.uncertaintyColumnIndexProperty.value = shiftedIndex(this.uncertaintyColumnIndexProperty.value);
     this.updateDataset(
       next,
       shiftedIndex(this.xColumnIndexProperty.value),
@@ -222,6 +241,7 @@ export class DataLabModel implements TModel {
   public reset(): void {
     this.rangeProperty.reset();
     this.fitModelProperty.reset();
+    this.uncertaintyColumnIndexProperty.reset();
   }
 
   public step(_dt: number): void {

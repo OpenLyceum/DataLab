@@ -43,6 +43,7 @@ export const FitFailureReason = {
   TOO_FEW_DISTINCT_X: "tooFewDistinctX",
   /** Proportional fit where every x is zero. */
   ALL_X_ZERO: "allXZero",
+  INVALID_UNCERTAINTY: "invalidUncertainty",
   UNSUPPORTED_X: "unsupportedX",
 } as const;
 
@@ -53,7 +54,7 @@ export type FitSuccess = {
   readonly model: FitModelValue;
   /** Parameter values, ordered as in MODEL_POWERS (highest power of x first). */
   readonly parameters: readonly number[];
-  /** Standard error of each parameter, or null when n = p leaves nothing to estimate scatter from. */
+  /** Parameter uncertainty from supplied σ, or from residual scatter when n > p. */
   readonly standardErrors: readonly number[] | null;
   /** Number of points used. */
   readonly count: number;
@@ -66,6 +67,7 @@ export type FitSuccess = {
   readonly rmse: number | null;
   /** Coefficient of determination; null for the proportional model, when y is constant, or when n = p. */
   readonly rSquared: number | null;
+  readonly reducedChiSquared: number | null;
 };
 
 export type FitFailure = {
@@ -97,6 +99,11 @@ export function usesReciprocalX(model: FitModelValue): boolean {
 
 export function supportsFitX(model: FitModelValue, x: number): boolean {
   return !usesReciprocalX(model) || Number.isFinite(x ** (MODEL_POWERS[model][0] as number));
+}
+
+/** A standard uncertainty must be finite and strictly positive. */
+export function validUncertainty(sigma: number | undefined): sigma is number {
+  return sigma !== undefined && Number.isFinite(sigma) && sigma > 0;
 }
 
 /** Evaluates a fitted model at x. */
@@ -242,11 +249,44 @@ function standardErrorsOf(transform: number[][], r: number[][], p: number, varia
   });
 }
 
+function applyWeights(
+  design: number[][],
+  rhs: number[],
+  uncertainties: readonly number[] | undefined,
+  sigmaMin: number | undefined,
+): void {
+  if (uncertainties && sigmaMin !== undefined) {
+    uncertainties.forEach((sigma, i) => {
+      const factor = sigmaMin / sigma;
+      design[i] = (design[i] as number[]).map((value) => value * factor);
+      rhs[i] = (rhs[i] as number) * factor;
+    });
+  }
+}
+
+function coefficientOfDetermination(
+  ys: readonly number[],
+  n: number,
+  meanY: number,
+  sumSquaredResiduals: number,
+): number | null {
+  let totalSumSquares = 0;
+  for (let i = 0; i < n; i++) {
+    totalSumSquares += ((ys[i] as number) - meanY) ** 2;
+  }
+  return totalSumSquares > 0 ? 1 - sumSquaredResiduals / totalSumSquares : null;
+}
+
 /**
  * Fits `model` to the points (xs[i], ys[i]). Every value must be finite — filter
  * with includedRows() first.
  */
-export function fitModel(model: FitModelValue, xs: readonly number[], ys: readonly number[]): FitResult {
+export function fitModel(
+  model: FitModelValue,
+  xs: readonly number[],
+  ys: readonly number[],
+  uncertainties?: readonly number[],
+): FitResult {
   const n = Math.min(xs.length, ys.length);
   const reciprocal = usesReciprocalX(model);
   const powers = reciprocal ? MODEL_POWERS.linear : MODEL_POWERS[model];
@@ -257,6 +297,9 @@ export function fitModel(model: FitModelValue, xs: readonly number[], ys: readon
 
   if (reciprocal && predictors.some((x) => !Number.isFinite(x))) {
     return fail(FitFailureReason.UNSUPPORTED_X);
+  }
+  if (uncertainties && (uncertainties.length !== n || uncertainties.some((sigma) => !validUncertainty(sigma)))) {
+    return fail(FitFailureReason.INVALID_UNCERTAINTY);
   }
   const obstacle = unsolvableReason(predictors, n, p, hasIntercept);
   if (obstacle !== null) {
@@ -283,6 +326,10 @@ export function fitModel(model: FitModelValue, xs: readonly number[], ys: readon
     rhs.push(ys[i] as number);
   }
   const original = design.map((row) => [...row]);
+
+  // Normalize inverse standard deviations before scaling the QR rows.
+  const sigmaMin = uncertainties?.reduce((min, sigma) => Math.min(min, sigma), Number.POSITIVE_INFINITY);
+  applyWeights(design, rhs, uncertainties, sigmaMin);
 
   householder(design, rhs, n, p);
 
@@ -322,18 +369,13 @@ export function fitModel(model: FitModelValue, xs: readonly number[], ys: readon
   if (degreesOfFreedom > 0) {
     const variance = sumSquaredResiduals / degreesOfFreedom;
     rmse = Math.sqrt(variance);
-    standardErrors = standardErrorsOf(transform, design, p, variance);
+    if (!uncertainties) {
+      standardErrors = standardErrorsOf(transform, design, p, variance);
+    }
   }
 
-  let rSquared: number | null = null;
-  if (hasIntercept && degreesOfFreedom > 0) {
-    let totalSumSquares = 0;
-    for (let i = 0; i < n; i++) {
-      totalSumSquares += ((ys[i] as number) - meanY) ** 2;
-    }
-    if (totalSumSquares > 0) {
-      rSquared = 1 - sumSquaredResiduals / totalSumSquares;
-    }
+  if (sigmaMin !== undefined) {
+    standardErrors = standardErrorsOf(transform, design, p, 1).map((error) => error * sigmaMin);
   }
 
   return {
@@ -346,6 +388,14 @@ export function fitModel(model: FitModelValue, xs: readonly number[], ys: readon
     residuals,
     sumSquaredResiduals,
     rmse,
-    rSquared,
+    rSquared:
+      !uncertainties && hasIntercept && degreesOfFreedom > 0
+        ? coefficientOfDetermination(ys, n, meanY, sumSquaredResiduals)
+        : null,
+    reducedChiSquared:
+      uncertainties && degreesOfFreedom > 0
+        ? residuals.reduce((sum, residual, i) => sum + (residual / (uncertainties[i] as number)) ** 2, 0) /
+          degreesOfFreedom
+        : null,
   };
 }
