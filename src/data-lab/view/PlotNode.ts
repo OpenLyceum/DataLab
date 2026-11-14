@@ -21,6 +21,7 @@ import { DragListener, KeyboardListener, Line, Node, Path, Rectangle } from "sce
 import { columnLabel } from "../../common/model/Dataset.js";
 import type { XRange } from "../../common/model/includedRows.js";
 import { evaluateFit, type FitSuccess, usesReciprocalX } from "../../common/model/leastSquares.js";
+import { axisCoordinate, axisValue } from "../../common/view/axisRange.js";
 import { ChartFrameNode } from "../../common/view/ChartFrameNode.js";
 import { installGraphGestures } from "../../common/view/GraphGestures.js";
 import { PointsCanvasNode } from "../../common/view/PointsCanvasNode.js";
@@ -85,9 +86,11 @@ export class PlotNode extends Node {
     frame.plotLayer.addChild(fitCurve);
     frame.plotLayer.addChild(pinnedCurve);
 
+    const toX = (value: number) => axisCoordinate(value, graphView.logXProperty.value);
+    const fromX = (value: number) => axisValue(value, graphView.logXProperty.value);
     const xFromPointer = (globalPoint: { x: number; y: number }): number => {
       const viewX = clamp(frame.plotLayer.globalToLocalPoint(globalPoint as never).x, 0, viewWidth);
-      return chartTransform.viewToModelX(viewX);
+      return fromX(chartTransform.viewToModelX(viewX));
     };
 
     // A second finger turns a one-finger range gesture into a pinch: the gesture is
@@ -157,7 +160,7 @@ export class PlotNode extends Node {
           fireOnHold: true,
           fire: (_event, keysPressed) => {
             const range = model.rangeProperty.value;
-            const values = model.distinctXValues();
+            const values = model.distinctXValues().filter((value) => Number.isFinite(toX(value)));
             if (!range || values.length === 0) {
               return;
             }
@@ -182,10 +185,10 @@ export class PlotNode extends Node {
                 moveTo(stepPoints(1));
                 break;
               case "shift+arrowLeft":
-                moveTo(current - fineStep);
+                moveTo(fromX(toX(current) - fineStep));
                 break;
               case "shift+arrowRight":
-                moveTo(current + fineStep);
+                moveTo(fromX(toX(current) + fineStep));
                 break;
               case "pageDown":
                 moveTo(stepPoints(-PAGE_POINTS));
@@ -274,15 +277,19 @@ export class PlotNode extends Node {
     // ── Updates ───────────────────────────────────────────────────────────────
     const updateRange = () => {
       const range = model.rangeProperty.value;
-      band.visible = range !== null;
+      const axisMin = range ? toX(range.min) : Number.NaN;
+      const axisMax = range ? toX(range.max) : Number.NaN;
+
       // An edge scrolled out of view is not offered as a handle. Visibility is set
       // once per edge: hiding and re-showing a focused handle would drop its focus.
       const inView = (x: number) => x >= -1 && x <= viewWidth + 1;
-      const x0 = range ? chartTransform.modelToViewX(range.min) : 0;
-      const x1 = range ? chartTransform.modelToViewX(range.max) : 0;
-      if (range) {
-        band.setRect(x0, 0, Math.max(x1 - x0, 1), viewHeight);
-        rangeStartHandle.x = x0;
+      const x0 = Number.isFinite(axisMin) ? chartTransform.modelToViewX(axisMin) : -Infinity;
+      const x1 = Number.isFinite(axisMax) ? chartTransform.modelToViewX(axisMax) : -Infinity;
+      band.visible = Number.isFinite(x1) && x1 >= 0 && x0 <= viewWidth;
+      if (band.visible) {
+        const start = clamp(x0, 0, viewWidth);
+        band.setRect(start, 0, Math.max(clamp(x1, 0, viewWidth) - start, 1), viewHeight);
+        rangeStartHandle.x = clamp(x0, 0, viewWidth);
         rangeEndHandle.x = x1;
       }
       rangeStartHandle.visible = range !== null && inView(x0);
@@ -293,7 +300,7 @@ export class PlotNode extends Node {
       let started = false;
       for (let k = 0; k <= CURVE_SAMPLES; k++) {
         const x = k === CURVE_SAMPLES ? max : min + ((max - min) * k) / CURVE_SAMPLES;
-        const y = evaluateFit(fit.model, fit.parameters, x);
+        const y = axisCoordinate(evaluateFit(fit.model, fit.parameters, fromX(x)), graphView.logYProperty.value);
         if (!Number.isFinite(y)) {
           started = false;
           continue;
@@ -321,8 +328,11 @@ export class PlotNode extends Node {
           min: Number.POSITIVE_INFINITY,
           max: Number.NEGATIVE_INFINITY,
         });
-        const min = Math.max(extent.min, visible.min);
-        const max = Math.min(extent.max, visible.max);
+        const min = Math.max(
+          graphView.logXProperty.value && extent.min <= 0 ? visible.min : toX(extent.min),
+          visible.min,
+        );
+        const max = Math.min(toX(extent.max), visible.max);
         if (!(min < max)) {
           continue;
         }
@@ -352,7 +362,9 @@ export class PlotNode extends Node {
     const updateAxes = () => {
       const xColumn = model.xColumnProperty.value;
       const yColumn = model.yColumnProperty.value;
-      frame.setRanges(graphView.xAxisRangeProperty.value, graphView.yAxisRangeProperty.value);
+      const logX = graphView.logXProperty.value;
+      const logY = graphView.logYProperty.value;
+      frame.setRanges(graphView.xAxisRangeProperty.value, graphView.yAxisRangeProperty.value, logX, logY);
       frame.xAxisLabel.string = xColumn ? columnLabel(xColumn) : "";
       frame.yAxisLabel.string = yColumn ? columnLabel(yColumn) : "";
       points.setPoints(
@@ -360,6 +372,8 @@ export class PlotNode extends Node {
         yColumn?.values ?? [],
         model.inclusionProperty.value.flags,
         model.uncertaintyColumnProperty.value?.values,
+        logX,
+        logY,
       );
     };
 
@@ -371,6 +385,8 @@ export class PlotNode extends Node {
         model.uncertaintyColumnProperty,
         graphView.xAxisRangeProperty,
         graphView.yAxisRangeProperty,
+        graphView.logXProperty,
+        graphView.logYProperty,
       ],
       () => {
         updateAxes();

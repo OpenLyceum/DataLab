@@ -17,6 +17,7 @@ residuals. Data stays in the browser. The last edited table is restored on reloa
 - Optional y-uncertainty column for weighted fits, vertical error bars, and reduced χ²
 - Pin a fit to compare its curve and results with a second range or model
 - Residual graph on the same x axis
+- Switch x and y independently between linear and logarithmic display scales
 - Zoom with the wheel or a pinch, pan by dragging an axis, and return with Auto scale; zooming never changes a fit
 - Export a CSV with `in_fit`, `fit_value` and `residual` columns, save the visible graphs as a PNG, or copy the fit results as text
 - Bundled sample dataset: a cart that speeds up on a ramp and then coasts on a level track

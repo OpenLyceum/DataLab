@@ -486,3 +486,35 @@ test("a pinned fit can be compared against another range and clears on table edi
   await pressButton(page, "Add row");
   await expect(page.getByRole("button", { name: "Compare fits" })).toBeDisabled();
 });
+
+test("log axes preserve the fit and a graph drag selects bounds in data units", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Distance (m),Signal (V)\n0,-1\n1,2\n10,11\n100,101\n1000,1001");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  const before = await copiedResults(page);
+  const toggle = (name: string) => page.getByRole("checkbox", { name, exact: true }).dispatchEvent("click");
+  await toggle("Log x");
+  await toggle("Log y");
+  await expect(page.getByRole("status")).toContainText("Hidden points on log axes (1)");
+  expect(await includedRowCount(page)).toBe(5);
+  expect(await copiedResults(page)).toBe(before);
+
+  const at = (exponent: number) => PLOT.left + ((exponent + 0.12) / 3.24) * PLOT.width;
+  const y = PLOT.top + PLOT.height / 2;
+  await page.mouse.move(at(0.5), y);
+  await page.mouse.down();
+  await page.mouse.move(at(2.5), y, { steps: 8 });
+  await page.mouse.up();
+  expect(Number(await page.getByLabel("Range minimum").inputValue())).toBeCloseTo(10 ** 0.5, 0);
+  expect(Number(await page.getByLabel("Range maximum").inputValue())).toBeGreaterThan(300);
+  expect(await includedRowCount(page)).toBe(2);
+  await page.mouse.move(at(1), y);
+  await page.mouse.wheel(0, -100);
+  expect(await includedRowCount(page)).toBe(2);
+  await pressButton(page, "Reset All");
+  await expect(page.getByRole("checkbox", { name: "Log x", exact: true })).not.toBeChecked();
+  expect(await includedRowCount(page)).toBe(5);
+});

@@ -15,7 +15,7 @@ import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
 import { DOM, HBox, Node, Text, VBox } from "scenerystack/scenery";
 import { PhetFont, ResetAllButton } from "scenerystack/scenery-phet";
 import { ScreenView, type ScreenViewOptions } from "scenerystack/sim";
-import { TextPushButton, VerticalAquaRadioButtonGroup } from "scenerystack/sun";
+import { Checkbox, TextPushButton, VerticalAquaRadioButtonGroup } from "scenerystack/sun";
 import {
   FLAT_PANEL_PUSH_BUTTON_OPTIONS,
   FLAT_RESET_ALL_BUTTON_OPTIONS,
@@ -311,16 +311,31 @@ export class DataLabScreenView extends ScreenView {
     });
     const pinControls = new HBox({ spacing: 6, children: [pinButton, compareButton, removePinButton, pinLegend] });
 
+    const logXCheckbox = new Checkbox(graphView.logXProperty, new Text(labels.logXStringProperty, textOptions), {
+      accessibleName: labels.logXStringProperty,
+    });
+    const logYCheckbox = new Checkbox(graphView.logYProperty, new Text(labels.logYStringProperty, textOptions), {
+      accessibleName: labels.logYStringProperty,
+    });
+    const logNotice = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH });
+    const scales = new HBox({ spacing: 8, children: [logXCheckbox, logYCheckbox, logNotice] });
+
     const statusText = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH + 40 });
     const liveStatus = new Node({ tagName: "div", ariaRole: "status" });
     liveStatus.setPDOMAttribute("aria-live", "polite");
     liveStatus.setPDOMAttribute("aria-atomic", "true");
-    fitTextProperty.link((fitText) => {
-      if (statusText.string !== fitText.status) {
+    Multilink.multilink(
+      [fitTextProperty, graphView.hiddenCountProperty, labels.logHiddenStringProperty],
+      (fitText, hidden, pattern) => {
+        const notice = hidden ? fillPattern(pattern, { count: hidden }) : "";
         statusText.string = fitText.status;
-        liveStatus.innerContent = fitText.status;
-      }
-    });
+        logNotice.string = notice;
+        const announcement = notice ? `${fitText.status}. ${notice}` : fitText.status;
+        if (liveStatus.innerContent !== announcement) {
+          liveStatus.innerContent = announcement;
+        }
+      },
+    );
     const messageText = new Text("", { font: NOTE_FONT, fill: DataLabColors.textColorProperty, maxWidth: PLOT_WIDTH });
     Multilink.multilink(
       [this.messageProperty, labels.dragHintStringProperty, labels.localOnlyStringProperty],
@@ -332,7 +347,7 @@ export class DataLabScreenView extends ScreenView {
     const belowPlots = new VBox({
       align: "left",
       spacing: 8,
-      children: [rangeRow, rangeButtons, statusText, messageText, pinControls],
+      children: [rangeRow, rangeButtons, statusText, messageText, pinControls, scales],
       left: PLOT_LEFT - 30,
       top: residualPlot.y + RESIDUAL_PLOT_HEIGHT + 42,
     });
@@ -472,6 +487,8 @@ export class DataLabScreenView extends ScreenView {
           zoomButton,
           autoScaleButton,
           liveStatus,
+          logXCheckbox,
+          logYCheckbox,
           pinButton,
           compareButton,
           removePinButton,
@@ -486,6 +503,7 @@ export class DataLabScreenView extends ScreenView {
 
   /** Resets view-side state. The table is kept; see DataLabModel.reset(). */
   public reset(): void {
+    this.graphView.setLogAxes(false, false);
     this.graphView.autoScale();
     this.messageProperty.reset();
   }

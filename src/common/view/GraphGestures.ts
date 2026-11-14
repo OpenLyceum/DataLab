@@ -49,7 +49,7 @@ export function installGraphGestures(
   const { viewWidth, viewHeight, chartTransform } = frame;
   const localPoint = (pointer: Pointer): Point => frame.globalToLocalPoint(pointer.point);
 
-  // Data units per pixel, from a given range.
+  // Axis coordinates per pixel, from a given range.
   const xPerPixel = (range: Range) => range.getLength() / viewWidth;
   const yPerPixel = (range: Range) => range.getLength() / viewHeight;
 

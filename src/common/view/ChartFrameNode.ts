@@ -15,6 +15,7 @@ import { Orientation } from "scenerystack/phet-core";
 import { Node, Rectangle, Text } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import DataLabColors from "../../DataLabColors.js";
+import { axisValue } from "./axisRange.js";
 
 const LABEL_FONT = new PhetFont(12);
 const TICK_FONT = new PhetFont(10);
@@ -30,6 +31,12 @@ const Y_LABEL_OFFSET = 46;
 /** Largest number of decimals a tick label is printed with before falling back to general notation. */
 const MAX_TICK_DECIMALS = 6;
 const MAX_FIXED_TICK = 1e6;
+
+function formatLogTick(coordinate: number, step: number): string {
+  const digits = Math.min(15, Math.max(3, decimalsFor(step) + 2));
+  const value = axisValue(coordinate, true);
+  return String(Number(value.toPrecision(digits)));
+}
 
 /** A "nice" tick spacing (1, 2 or 5 × 10ⁿ) giving about `targetTicks` ticks across `span`. */
 export function niceStep(span: number, targetTicks = 5): number {
@@ -76,6 +83,9 @@ export class ChartFrameNode extends Node {
   public readonly xAxisStrip: Rectangle;
   public readonly yAxisStrip: Rectangle;
   private readonly xTickLabels: TickLabelSet;
+  private readonly yTickLabels: TickLabelSet;
+  private logX = false;
+  private logY = false;
   public readonly viewWidth: number;
   public readonly viewHeight: number;
 
@@ -109,8 +119,11 @@ export class ChartFrameNode extends Node {
     // Ticks and their labels straddle the plot edge; they must not take pointer
     // events meant for the plot or the axis strips.
     const tickOptions = { edge: "min" as const, stroke: DataLabColors.textColorProperty, pickable: false };
-    const createLabel = (step: () => number) => (value: number) =>
-      new Text(formatTick(value, step()), { font: TICK_FONT, fill: DataLabColors.textColorProperty });
+    const createLabel = (step: () => number, log: () => boolean) => (value: number) =>
+      new Text(log() ? formatLogTick(value, step()) : formatTick(value, step()), {
+        font: TICK_FONT,
+        fill: DataLabColors.textColorProperty,
+      });
 
     const xGrid = new GridLineSet(chartTransform, Orientation.HORIZONTAL, 1, gridOptions);
     const yGrid = new GridLineSet(chartTransform, Orientation.VERTICAL, 1, gridOptions);
@@ -119,9 +132,13 @@ export class ChartFrameNode extends Node {
     const yTickLabels = new TickLabelSet(chartTransform, Orientation.VERTICAL, 1, {
       edge: "min",
       pickable: false,
-      createLabel: createLabel(() => this.yStep),
+      createLabel: createLabel(
+        () => this.yStep,
+        () => this.logY,
+      ),
     });
     this.xSets = [xGrid, xTicks];
+    this.yTickLabels = yTickLabels;
     this.ySets = [yGrid, yTicks, yTickLabels];
 
     this.plotLayer = new Node({ clipArea: Shape.rect(0, 0, viewWidth, viewHeight) });
@@ -131,7 +148,10 @@ export class ChartFrameNode extends Node {
     this.xTickLabels = new TickLabelSet(chartTransform, Orientation.HORIZONTAL, 1, {
       edge: "min",
       pickable: false,
-      createLabel: createLabel(() => this.xStep),
+      createLabel: createLabel(
+        () => this.xStep,
+        () => this.logX,
+      ),
     });
     this.xSets.push(this.xTickLabels);
 
@@ -183,9 +203,15 @@ export class ChartFrameNode extends Node {
   }
 
   /** Sets both axis ranges and picks tick spacings to suit them. */
-  public setRanges(xRange: Range, yRange: Range): void {
+  public setRanges(xRange: Range, yRange: Range, logX = false, logY = false): void {
+    const refreshX = logX !== this.logX;
+    const refreshY = logY !== this.logY;
+    this.logX = logX;
+    this.logY = logY;
     const xStep = niceStep(xRange.getLength(), 6);
     const yStep = niceStep(yRange.getLength(), this.yTickCount);
+    const invalidateX = refreshX || (logX && xStep !== this.xStep);
+    const invalidateY = refreshY || (logY && yStep !== this.yStep);
 
     // Widen the spacing before the range grows and narrow it after the range
     // shrinks, so the tick sets never try to lay out thousands of ticks.
@@ -207,5 +233,11 @@ export class ChartFrameNode extends Node {
     this.chartTransform.setModelXRange(xRange);
     this.chartTransform.setModelYRange(yRange);
     applySpacing(false);
+    if (invalidateX) {
+      this.xTickLabels.invalidateTickLabelSet();
+    }
+    if (invalidateY) {
+      this.yTickLabels.invalidateTickLabelSet();
+    }
   }
 }

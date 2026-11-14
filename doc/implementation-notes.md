@@ -118,7 +118,13 @@ model is fitted. The pin is a snapshot shown as a dashed curve and included in
 the comparison and copied results. Table edits, axis changes and Reset All clear
 the pin. The residual plot and CSV describe the current fit.
 
-Remaining for 0.2: log axes.
+Log x and Log y independently change the main plot to base-10 scales. Nonpositive
+points on a logarithmic axis are hidden from the graph and counted in the status
+announcement. Fit selection, regression, and CSV export still use the original
+measurements. The residual plot follows the x scale and keeps its residual axis
+linear. Error bars that cross zero on log y are clipped at the graph edge.
+
+All 0.2 features are implemented.
 
 0.3: nonlinear models (Levenberg–Marquardt); multiple runs; session files;
 statistics, slope and area on a range.
