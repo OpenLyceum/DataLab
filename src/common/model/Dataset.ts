@@ -9,9 +9,12 @@
  * operation returns a new Dataset, so a Property holding one notifies on each edit.
  */
 
+import { compileFormula, formulaReferences, shiftFormulaAfterDeletion } from "./columnFormula.js";
+
 export type Column = {
   readonly name: string;
   readonly unit: string;
+  readonly formula?: string;
   /** Cell text as imported or typed, one per row. */
   readonly texts: readonly string[];
   /** Numeric reading of each cell; NaN for a blank or non-numeric cell. */
@@ -21,6 +24,8 @@ export type Column = {
 export type Dataset = {
   readonly columns: readonly Column[];
   readonly rowCount: number;
+  /** Manually excluded row indices, independent of the selected fit range. */
+  readonly excludedRows?: readonly number[];
 };
 
 export const EMPTY_DATASET: Dataset = { columns: [], rowCount: 0 };
@@ -57,6 +62,57 @@ export function columnLabel(column: Column): string {
   return column.unit === "" ? column.name : `${column.name} (${column.unit})`;
 }
 
+/** Recalculate left to right so a formula can use earlier calculated columns. */
+export function recalculateColumns(dataset: Dataset): Dataset {
+  if (!dataset.columns.some((column) => column.formula !== undefined)) {
+    return dataset;
+  }
+  const columns: Column[] = [];
+  for (const column of dataset.columns) {
+    if (column.formula === undefined) {
+      columns.push(column);
+      continue;
+    }
+    const expression = compileFormula(column.formula, columns.length);
+    const values = Array.from({ length: dataset.rowCount }, (_, row) => {
+      let validInputs = true;
+      const value =
+        expression?.((index) => {
+          const input = columns[index]?.values[row] ?? Number.NaN;
+          validInputs &&= Number.isFinite(input);
+          return input;
+        }) ?? Number.NaN;
+      return validInputs && Number.isFinite(value) ? value : Number.NaN;
+    });
+    columns.push({ ...column, values, texts: values.map((value) => (Number.isFinite(value) ? String(value) : "")) });
+  }
+  return { ...dataset, columns };
+}
+
+export function setCalculatedColumn(
+  dataset: Dataset,
+  index: number,
+  name: string,
+  unit: string,
+  formula: string,
+): Dataset {
+  if (
+    !(name && Number.isInteger(index)) ||
+    index < 0 ||
+    index > dataset.columns.length ||
+    !compileFormula(formula, index)
+  ) {
+    return dataset;
+  }
+  const columns = [...dataset.columns];
+  columns[index] = { name, unit, formula, values: [], texts: [] };
+  return recalculateColumns({ ...dataset, columns });
+}
+
+export function canDeleteColumn(dataset: Dataset, index: number): boolean {
+  return !dataset.columns.some((column) => column.formula && formulaReferences(column.formula).includes(index));
+}
+
 function replaceColumn(dataset: Dataset, columnIndex: number, column: Column): Dataset {
   return { ...dataset, columns: dataset.columns.map((existing, i) => (i === columnIndex ? column : existing)) };
 }
@@ -64,12 +120,12 @@ function replaceColumn(dataset: Dataset, columnIndex: number, column: Column): D
 /** Replaces one cell's text. Typed cells accept either decimal mark. */
 export function setCell(dataset: Dataset, rowIndex: number, columnIndex: number, text: string): Dataset {
   const column = dataset.columns[columnIndex];
-  if (!column || rowIndex < 0 || rowIndex >= dataset.rowCount) {
+  if (!column || column.formula !== undefined || rowIndex < 0 || rowIndex >= dataset.rowCount) {
     return dataset;
   }
   const texts = column.texts.map((existing, i) => (i === rowIndex ? text : existing));
   const values = column.values.map((existing, i) => (i === rowIndex ? parseNumber(text, true) : existing));
-  return replaceColumn(dataset, columnIndex, { ...column, texts, values });
+  return recalculateColumns(replaceColumn(dataset, columnIndex, { ...column, texts, values }));
 }
 
 export function setColumnHeader(dataset: Dataset, columnIndex: number, name: string, unit: string): Dataset {
@@ -77,16 +133,33 @@ export function setColumnHeader(dataset: Dataset, columnIndex: number, name: str
   return column ? replaceColumn(dataset, columnIndex, { ...column, name, unit }) : dataset;
 }
 
+export function setRowExcluded(dataset: Dataset, rowIndex: number, excluded: boolean): Dataset {
+  const current = dataset.excludedRows ?? [];
+  if (
+    !Number.isInteger(rowIndex) ||
+    rowIndex < 0 ||
+    rowIndex >= dataset.rowCount ||
+    current.includes(rowIndex) === excluded
+  ) {
+    return dataset;
+  }
+  return {
+    ...dataset,
+    excludedRows: excluded ? [...current, rowIndex] : current.filter((row) => row !== rowIndex),
+  };
+}
+
 /** Appends one blank row. */
 export function addRow(dataset: Dataset): Dataset {
-  return {
+  return recalculateColumns({
+    ...dataset,
     rowCount: dataset.rowCount + 1,
     columns: dataset.columns.map((column) => ({
       ...column,
       texts: [...column.texts, ""],
       values: [...column.values, Number.NaN],
     })),
-  };
+  });
 }
 
 export function deleteRow(dataset: Dataset, rowIndex: number): Dataset {
@@ -95,12 +168,35 @@ export function deleteRow(dataset: Dataset, rowIndex: number): Dataset {
   }
   return {
     rowCount: dataset.rowCount - 1,
+    excludedRows: (dataset.excludedRows ?? [])
+      .filter((row) => row !== rowIndex)
+      .map((row) => (row > rowIndex ? row - 1 : row)),
     columns: dataset.columns.map((column) => ({
       ...column,
       texts: column.texts.filter((_, i) => i !== rowIndex),
       values: column.values.filter((_, i) => i !== rowIndex),
     })),
   };
+}
+
+/** Appends a blank column without reinterpreting the existing cells. */
+export function addColumn(dataset: Dataset, name: string): Dataset {
+  const texts = Array.from({ length: dataset.rowCount }, () => "");
+  return { ...dataset, columns: [...dataset.columns, createColumn(name, "", texts)] };
+}
+
+export function deleteColumn(dataset: Dataset, columnIndex: number): Dataset {
+  if (!(dataset.columns[columnIndex] && canDeleteColumn(dataset, columnIndex))) {
+    return dataset;
+  }
+  const columns = dataset.columns
+    .filter((_, i) => i !== columnIndex)
+    .map((column) =>
+      column.formula === undefined
+        ? column
+        : { ...column, formula: shiftFormulaAfterDeletion(column.formula, columnIndex) },
+    );
+  return { ...dataset, columns };
 }
 
 /**
@@ -113,13 +209,22 @@ export function pasteBlock(
   columnIndex: number,
   block: readonly (readonly string[])[],
 ): Dataset {
-  let result = dataset;
-  while (result.rowCount < rowIndex + block.length) {
-    result = addRow(result);
-  }
+  const extra = Math.max(0, rowIndex + block.length - dataset.rowCount);
+  const result =
+    extra === 0
+      ? dataset
+      : {
+          ...dataset,
+          rowCount: dataset.rowCount + extra,
+          columns: dataset.columns.map((column) => ({
+            ...column,
+            texts: [...column.texts, ...new Array<string>(extra).fill("")],
+            values: [...column.values, ...new Array<number>(extra).fill(Number.NaN)],
+          })),
+        };
   const columns = result.columns.map((column, c) => {
     const offset = c - columnIndex;
-    if (offset < 0) {
+    if (offset < 0 || column.formula !== undefined) {
       return column;
     }
     const texts = [...column.texts];
@@ -135,5 +240,5 @@ export function pasteBlock(
     });
     return changed ? { ...column, texts, values } : column;
   });
-  return { rowCount: result.rowCount, columns };
+  return recalculateColumns({ ...result, columns });
 }

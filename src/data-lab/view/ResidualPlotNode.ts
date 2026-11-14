@@ -57,8 +57,8 @@ export class ResidualPlotNode extends Node {
     installGraphGestures(frame, this, graphView, { zoomsY: false });
 
     Multilink.multilink(
-      [model.fitProperty, xAxisRangeProperty, labels.residualsStringProperty],
-      (fit, xRange, residualsLabel) => {
+      [model.fitProperty, xAxisRangeProperty, labels.residualsStringProperty, graphView.logXProperty],
+      (fit, xRange, residualsLabel, logX) => {
         const xColumn = model.xColumnProperty.value;
         const yColumn = model.yColumnProperty.value;
         const indices = model.inclusionProperty.value.indices;
@@ -75,12 +75,14 @@ export class ResidualPlotNode extends Node {
           });
         }
         const halfHeight = largest > 0 ? largest * Y_HEADROOM : 1;
-        frame.setRanges(xRange, new Range(-halfHeight, halfHeight));
+        frame.setRanges(xRange, new Range(-halfHeight, halfHeight), logX);
         zeroLine.y = chartTransform.modelToViewY(0);
         points.setPoints(
           xs,
           residuals,
           xs.map(() => true),
+          undefined,
+          logX,
         );
         frame.xAxisLabel.string = xColumn ? columnLabel(xColumn) : "";
         frame.yAxisLabel.string = withUnit(residualsLabel, yColumn?.unit ? `(${yColumn.unit})` : "");

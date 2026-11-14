@@ -14,10 +14,10 @@ export type TextHandler = (text: string, fileName: string) => void;
 const ACCEPTED_TYPES = ".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain";
 
 /** Shows the browser's file picker and hands the chosen file's text to `handler`. */
-export function openTextFile(handler: TextHandler): void {
+export function openTextFile(handler: TextHandler, accept = ACCEPTED_TYPES): void {
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = ACCEPTED_TYPES;
+  input.accept = accept;
   input.addEventListener("change", () => {
     const file = input.files?.[0];
     if (file) {
@@ -59,7 +59,12 @@ export function installDropTarget(handler: TextHandler): () => void {
 
 /** Saves `text` as a file through the browser's download mechanism. */
 export function downloadText(text: string, fileName: string, mimeType: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: mimeType }));
+  downloadBlob(new Blob([text], { type: mimeType }), fileName);
+}
+
+/** Saves a locally generated file. */
+export function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;

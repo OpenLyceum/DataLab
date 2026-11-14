@@ -16,20 +16,23 @@
 
 import { Multilink } from "scenerystack/axon";
 import { DOM, Node } from "scenerystack/scenery";
-import { columnLabel, type Dataset } from "../../common/model/Dataset.js";
+import { canDeleteColumn, columnLabel, type Dataset } from "../../common/model/Dataset.js";
 import { splitHeader, tokenize } from "../../common/model/parseTable.js";
 import DataLabColors from "../../DataLabColors.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
+import { editCalculatedColumn } from "./editCalculatedColumn.js";
 import { fillPattern } from "./fillPattern.js";
 
 const FONT = "12px Arial, sans-serif";
-const MIN_CELL_WIDTH = 86;
+const MIN_CELL_WIDTH = 68;
 
 /** Room kept for the vertical scrollbar when sizing columns to fill the table. */
 const SCROLLBAR_ALLOWANCE = 18;
 const MARKER_WIDTH = 22;
 const ROW_NUMBER_WIDTH = 30;
+const REMOVE_BUTTON_WIDTH = 23;
+const EXCLUSION_WIDTH = 48;
 const CELL_PADDING = "3px 5px";
 const CHECK_MARK = "✓";
 
@@ -63,10 +66,13 @@ export class DataTableNode extends Node {
 
     let renderedRowCount = -1;
     let renderedColumnCount = -1;
+    let formulaButtons = new Map<number, HTMLButtonElement>();
+    let removeColumns: HTMLButtonElement[] = [];
     let headerInputs: HTMLInputElement[] = [];
     let cellInputs: HTMLInputElement[][] = [];
     let rows: HTMLTableRowElement[] = [];
     let markers: HTMLTableCellElement[] = [];
+    let exclusionInputs: HTMLInputElement[] = [];
 
     const css = () => ({
       header: DataLabColors.tableHeaderBackgroundColorProperty.value.toCSS(),
@@ -96,19 +102,37 @@ export class DataTableNode extends Node {
       }
     };
 
+    const removeButton = (name: string, action: () => void) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "×";
+      button.title = name;
+      button.setAttribute("aria-label", name);
+      button.style.cssText = `min-width: ${REMOVE_BUTTON_WIDTH}px; font: ${FONT};`;
+      button.addEventListener("click", action);
+      return button;
+    };
+
     const build = (dataset: Dataset) => {
       const colors = css();
       const rowCount = Math.min(dataset.rowCount, MAX_RENDERED_ROWS);
-      const available = options.width - MARKER_WIDTH - ROW_NUMBER_WIDTH - SCROLLBAR_ALLOWANCE;
-      cellWidth = Math.max(MIN_CELL_WIDTH, Math.floor(available / Math.max(dataset.columns.length, 1)));
+      const available =
+        options.width - MARKER_WIDTH - ROW_NUMBER_WIDTH - REMOVE_BUTTON_WIDTH - EXCLUSION_WIDTH - SCROLLBAR_ALLOWANCE;
+      cellWidth = Math.max(
+        MIN_CELL_WIDTH,
+        Math.floor(available / Math.max(dataset.columns.length, 1)) - REMOVE_BUTTON_WIDTH,
+      );
       wrapper.style.background = colors.surface;
       wrapper.style.border = `1px solid ${colors.grid}`;
       thead.replaceChildren();
       tbody.replaceChildren();
       headerInputs = [];
+      removeColumns = [];
+      formulaButtons = new Map();
       cellInputs = [];
       rows = [];
       markers = [];
+      exclusionInputs = [];
 
       const headerCellStyle = `position: sticky; top: 0; z-index: 1; background: ${colors.header}; color: ${colors.text}; border: 1px solid ${colors.grid}; padding: 0; font-weight: bold;`;
       const headerRow = document.createElement("tr");
@@ -124,9 +148,17 @@ export class DataTableNode extends Node {
       numberHeader.setAttribute("aria-label", labels.rowStringProperty.value);
       numberHeader.scope = "col";
       numberHeader.style.cssText = `${headerCellStyle} width: ${ROW_NUMBER_WIDTH}px;`;
-      headerRow.append(markerHeader, numberHeader);
+      const actionsHeader = document.createElement("th");
+      actionsHeader.scope = "col";
+      actionsHeader.style.cssText = headerCellStyle;
+      actionsHeader.setAttribute("aria-label", labels.deleteRowStringProperty.value);
+      const exclusionHeader = document.createElement("th");
+      exclusionHeader.scope = "col";
+      exclusionHeader.style.cssText = `${headerCellStyle} min-width: ${EXCLUSION_WIDTH}px;`;
+      exclusionHeader.textContent = labels.excludeStringProperty.value;
+      headerRow.append(markerHeader, numberHeader, actionsHeader, exclusionHeader);
 
-      dataset.columns.forEach((_column, c) => {
+      dataset.columns.forEach((column, c) => {
         const th = document.createElement("th");
         th.scope = "col";
         th.style.cssText = headerCellStyle;
@@ -147,7 +179,26 @@ export class DataTableNode extends Node {
           }
         });
         headerInputs.push(input);
-        th.appendChild(input);
+        th.style.whiteSpace = "nowrap";
+        const remove = removeButton(
+          fillPattern(a11y.controls.deleteColumnStringProperty.value, { position: c + 1 }),
+          () => {
+            // Read the current size after the synchronous rebuild and keep focus in the table.
+            model.deleteColumn(c);
+            headerInputs[Math.min(c, headerInputs.length - 1)]?.focus();
+          },
+        );
+        removeColumns.push(remove);
+        th.append(input, remove);
+        if (column.formula !== undefined) {
+          const edit = document.createElement("button");
+          edit.type = "button";
+          edit.textContent = "ƒx";
+          edit.title = labels.editFormulaStringProperty.value;
+          formulaButtons.set(c, edit);
+          edit.addEventListener("click", () => editCalculatedColumn(model, c));
+          th.append(edit);
+        }
         headerRow.appendChild(th);
       });
       thead.appendChild(headerRow);
@@ -161,7 +212,27 @@ export class DataTableNode extends Node {
         number.scope = "row";
         number.textContent = String(r + 1);
         number.style.cssText = `${cellStyle} text-align: right; padding: ${CELL_PADDING}; font-weight: normal; color: ${colors.text}; background: ${colors.header};`;
-        tr.append(marker, number);
+        const actions = document.createElement("td");
+        actions.style.cssText = cellStyle;
+        actions.appendChild(
+          removeButton(fillPattern(a11y.controls.deleteRowStringProperty.value, { row: r + 1 }), () => {
+            model.deleteRow(r);
+            if (cellInputs.length === 0) {
+              headerInputs[0]?.focus();
+            } else {
+              focusCell(Math.min(r, cellInputs.length - 1), 0);
+            }
+          }),
+        );
+        const exclusion = document.createElement("td");
+        exclusion.style.cssText = `${cellStyle} text-align: center;`;
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.setAttribute("aria-label", fillPattern(a11y.controls.excludeRowStringProperty.value, { row: r + 1 }));
+        checkbox.addEventListener("change", () => model.setRowExcluded(r, checkbox.checked));
+        exclusion.appendChild(checkbox);
+        exclusionInputs.push(checkbox);
+        tr.append(marker, number, actions, exclusion);
         const rowInputs: HTMLInputElement[] = [];
         dataset.columns.forEach((_column, c) => {
           const td = document.createElement("td");
@@ -187,7 +258,7 @@ export class DataTableNode extends Node {
           input.addEventListener("paste", (event) => {
             const text = event.clipboardData?.getData("text/plain") ?? "";
             // A single value pastes into the cell as usual; a block fills the table.
-            if (/[\t\n]/.test(text.trim())) {
+            if (!input.readOnly && /[\t\n]/.test(text.trim())) {
               event.preventDefault();
               const block = tokenize(text.replace(/\r\n?/g, "\n").replace(/\n+$/, ""), "\t");
               model.pasteBlock(r, c, block);
@@ -210,8 +281,23 @@ export class DataTableNode extends Node {
     /** Writes the model's text into the inputs, leaving the one being typed in alone. */
     const fill = (dataset: Dataset) => {
       const colors = css();
+      const excluded = new Set(dataset.excludedRows);
+      exclusionInputs.forEach((input, index) => {
+        input.checked = excluded.has(index);
+      });
       caption.textContent = a11y.controls.dataTableStringProperty.value;
       dataset.columns.forEach((column, c) => {
+        formulaButtons
+          .get(c)
+          ?.setAttribute("aria-label", `${labels.editFormulaStringProperty.value} · ${columnLabel(column)}`);
+        const remove = removeColumns[c];
+        if (remove) {
+          const blocked = !canDeleteColumn(dataset, c);
+          remove.disabled = blocked || dataset.columns.length === 1;
+          remove.title = blocked
+            ? labels.formulaDependencyStringProperty.value
+            : (remove.getAttribute("aria-label") ?? "");
+        }
         const header = headerInputs[c];
         if (header && header !== document.activeElement) {
           header.value = columnLabel(column);
@@ -222,7 +308,8 @@ export class DataTableNode extends Node {
             return;
           }
           const text = column.texts[r] ?? "";
-          if (input !== document.activeElement && input.value !== text) {
+          input.readOnly = column.formula !== undefined;
+          if ((input.readOnly || input !== document.activeElement) && input.value !== text) {
             input.value = text;
           }
           const isInvalid = text !== "" && !Number.isFinite(column.values[r]);
@@ -277,6 +364,13 @@ export class DataTableNode extends Node {
         a11y.controls.dataTableStringProperty,
         a11y.controls.cellStringProperty,
         a11y.controls.columnHeaderStringProperty,
+        a11y.controls.deleteColumnStringProperty,
+        a11y.controls.deleteRowStringProperty,
+        labels.deleteRowStringProperty,
+        labels.excludeStringProperty,
+        labels.editFormulaStringProperty,
+        labels.formulaDependencyStringProperty,
+        a11y.controls.excludeRowStringProperty,
       ],
       rebuild,
     );

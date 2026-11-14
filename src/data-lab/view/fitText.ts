@@ -18,12 +18,13 @@ import {
 import {
   type FitFailure,
   FitFailureReason,
+  FitModel,
   type FitModelValue,
   type FitSuccess,
   MODEL_POWERS,
 } from "../../common/model/leastSquares.js";
 import { StringManager } from "../../i18n/StringManager.js";
-import type { DataLabModel } from "../model/DataLabModel.js";
+import type { DataLabModel, PinnedFit } from "../model/DataLabModel.js";
 import { fillPattern } from "./fillPattern.js";
 
 /** Below this many points left over (n − p), the uncertainties come with a caution. */
@@ -51,10 +52,21 @@ export function modelNameProperties(): Record<FitModelValue, TReadOnlyProperty<s
     proportional: labels.proportionalStringProperty,
     linear: labels.linearStringProperty,
     quadratic: labels.quadraticStringProperty,
+    cubic: labels.cubicStringProperty,
+    inverse: labels.inverseStringProperty,
+    inverseSquare: labels.inverseSquareStringProperty,
+    exponential: labels.exponentialStringProperty,
   };
 }
 
 type Labels = ReturnType<StringManager["getLabels"]>;
+
+function yBounds(range: { min: number; max: number }, unit: string, labels: Labels): string {
+  return fillPattern(labels.rectangleBoundsStringProperty.value, {
+    min: withUnit(formatSignificant(range.min), unit),
+    max: withUnit(formatSignificant(range.max), unit),
+  });
+}
 
 function statusText(model: DataLabModel, labels: Labels): string {
   const inclusion = model.inclusionProperty.value;
@@ -72,22 +84,46 @@ function statusText(model: DataLabModel, labels: Labels): string {
         max: withUnit(formatSignificant(range.max), xUnit),
       })
     : fillPattern(labels.statusAllStringProperty.value, { used, total });
-  return inclusion.skippedCount > 0
-    ? `${status} · ${fillPattern(labels.statusSkippedStringProperty.value, { count: inclusion.skippedCount })}`
-    : status;
+  const notes = [status];
+  if (range?.y) {
+    notes.push(yBounds(range.y, model.yColumnProperty.value?.unit ?? "", labels));
+  }
+  if (inclusion.skippedCount > 0) {
+    notes.push(fillPattern(labels.statusSkippedStringProperty.value, { count: inclusion.skippedCount }));
+  }
+  if (inclusion.unsupportedCount > 0) {
+    notes.push(fillPattern(labels.statusUnsupportedStringProperty.value, { count: inclusion.unsupportedCount }));
+  }
+  if (inclusion.invalidUncertaintyCount > 0) {
+    notes.push(
+      fillPattern(labels.statusInvalidUncertaintyStringProperty.value, { count: inclusion.invalidUncertaintyCount }),
+    );
+  }
+  return notes.join(" · ");
 }
 
 /** One line per parameter, then RMSE, R² and the number of points. */
 function successLines(fit: FitSuccess, xUnit: string, yUnit: string, labels: Labels): string[] {
   const symbols = MODEL_SYMBOLS[fit.model];
-  const powers = MODEL_POWERS[fit.model];
   const lines = fit.parameters.map((value, j) => {
-    const formatted = formatWithUncertainty(value, fit.standardErrors?.[j] ?? null);
-    return `${symbols[j]} = ${withUnit(formatted, parameterUnit(xUnit, yUnit, powers[j] as number))}`;
+    const formatted =
+      fit.model === FitModel.EXPONENTIAL && j === 2
+        ? String(value)
+        : formatWithUncertainty(value, fit.standardErrors?.[j] ?? null);
+    const unit =
+      fit.model === FitModel.EXPONENTIAL
+        ? ([yUnit, parameterUnit(xUnit, "", 1), xUnit][j] ?? "")
+        : parameterUnit(xUnit, yUnit, MODEL_POWERS[fit.model][j] as number);
+    return `${symbols[j]} = ${withUnit(formatted, unit)}`;
   });
   if (fit.rmse !== null) {
     lines.push(
       fillPattern(labels.rmseStringProperty.value, { value: withUnit(formatSignificant(fit.rmse, 3), yUnit) }),
+    );
+  }
+  if (fit.reducedChiSquared !== null) {
+    lines.push(
+      fillPattern(labels.reducedChiSquaredStringProperty.value, { value: formatSignificant(fit.reducedChiSquared) }),
     );
   }
   if (fit.rSquared !== null) {
@@ -101,12 +137,24 @@ function successLines(fit: FitSuccess, xUnit: string, yUnit: string, labels: Lab
 
 function cautionText(fit: FitSuccess, labels: Labels): string {
   if (fit.degreesOfFreedom === 0) {
+    if (fit.standardErrors !== null) {
+      return "";
+    }
     return labels.noScatterStringProperty.value;
   }
   return fit.degreesOfFreedom < CAUTION_DEGREES_OF_FREEDOM ? labels.fewPointsStringProperty.value : "";
 }
 
 function failureLine(fit: FitFailure, labels: Labels): string {
+  if (fit.reason === FitFailureReason.NONLINEAR_FAILURE) {
+    return labels.nonlinearFailureStringProperty.value;
+  }
+  if (fit.reason === FitFailureReason.INVALID_UNCERTAINTY) {
+    return fillPattern(labels.statusInvalidUncertaintyStringProperty.value, { count: fit.count });
+  }
+  if (fit.reason === FitFailureReason.UNSUPPORTED_X) {
+    return fillPattern(labels.statusUnsupportedStringProperty.value, { count: fit.count });
+  }
   const pattern =
     fit.reason === FitFailureReason.TOO_FEW_POINTS
       ? labels.tooFewPointsStringProperty.value
@@ -126,12 +174,14 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       model.inclusionProperty,
       model.fitProperty,
       model.rangeProperty,
-      names.proportional,
-      names.linear,
-      names.quadratic,
+      ...Object.values(names),
       labels.statusAllStringProperty,
       labels.statusRangeStringProperty,
+      labels.rectangleBoundsStringProperty,
       labels.statusSkippedStringProperty,
+      labels.statusInvalidUncertaintyStringProperty,
+      labels.reducedChiSquaredStringProperty,
+      labels.statusUnsupportedStringProperty,
       labels.pointsUsedStringProperty,
       labels.rmseStringProperty,
       labels.rSquaredStringProperty,
@@ -139,6 +189,7 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       labels.tooFewDistinctXStringProperty,
       labels.allXZeroStringProperty,
       labels.noScatterStringProperty,
+      labels.nonlinearFailureStringProperty,
       labels.fewPointsStringProperty,
     ],
     (): FitText => {
@@ -154,6 +205,22 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       };
     },
   );
+}
+
+export function pinnedFitText(pin: PinnedFit): FitText {
+  const labels = StringManager.getInstance().getLabels();
+  const { fit, xColumn, yColumn, range } = pin;
+  return {
+    status:
+      fillPattern(labels.pinnedRangeStringProperty.value, {
+        min: withUnit(formatSignificant(range.min), xColumn.unit),
+        max: withUnit(formatSignificant(range.max), xColumn.unit),
+      }) + (range.y ? ` · ${yBounds(range.y, yColumn.unit, labels)}` : ""),
+    modelName: modelNameProperties()[fit.model].value,
+    equation: MODEL_EQUATIONS[fit.model],
+    lines: successLines(fit, xColumn.unit, yColumn.unit, labels),
+    caution: cautionText(fit, labels),
+  };
 }
 
 /** The fit as plain text, for pasting into a lab report. */

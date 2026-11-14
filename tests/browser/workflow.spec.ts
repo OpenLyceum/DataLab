@@ -302,3 +302,437 @@ test("pasting a table outside a text field replaces the data", async ({ page }) 
   expect(results).toContain("Points used: 4");
   expect(results).toMatch(/^m = .* s\/m$/m);
 });
+
+test("table structure edits keep the fit tied to the surviving columns", async ({ page }) => {
+  await open(page);
+  await setRange(page, "1.5", "3");
+  await pressButton(page, "Add column");
+  await expect(page.getByLabel("Name and unit of column 3")).toHaveValue("Column 3");
+
+  // Fit against the original columns after removing a preceding, unselected column.
+  await page.getByLabel("Column on the x axis").selectOption("1");
+  await page.getByLabel("Column on the y axis").selectOption("1");
+  await setRange(page, "0", "2");
+  const before = await copiedResults(page);
+  await page.getByLabel("Delete column 1", { exact: true }).click();
+  await expect(page.getByLabel("Column on the x axis")).toHaveValue("0");
+  await expect(page.getByLabel("Range maximum")).toHaveValue("2");
+  expect(await copiedResults(page)).toBe(before);
+
+  await page.getByLabel("Delete row 1", { exact: true }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(60);
+  await expect(page.getByRole("status")).toContainText("of 60 rows");
+  await page.getByLabel("Delete column 1", { exact: true }).click();
+  await expect(page.getByLabel("Range maximum")).toHaveValue("");
+  await expect(page.getByLabel("Delete column 1", { exact: true })).toBeDisabled();
+
+  const cell = page.locator("tbody tr").first().locator("input[type=text]");
+  await cell.fill("2");
+  await cell.press("Enter");
+  await expect(page.getByLabel("Column on the x axis")).toHaveValue("0");
+  await expect(page.getByRole("status")).toContainText("Using 1 of 60 rows");
+});
+
+test("graph export downloads an opaque PNG with axes and data", async ({ page }) => {
+  await open(page);
+  await setRange(page, "1.5", "3");
+  const downloadEvent = page.waitForEvent("download");
+  await pressButton(page, "Export PNG");
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("data-lab.png");
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const png = readFileSync(path as string);
+  expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const image = await page.evaluate(async (base64) => {
+    const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Canvas unavailable");
+    }
+    context.drawImage(bitmap, 0, 0);
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      opaqueCorner: context.getImageData(0, 0, 1, 1).data[3] === 255,
+      hasDataPoint: context
+        .getImageData(0, 0, bitmap.width, bitmap.height)
+        .data.some(
+          (red, index, pixels) =>
+            index % 4 === 0 && red === 79 && pixels[index + 1] === 195 && pixels[index + 2] === 247,
+        ),
+    };
+  }, png.toString("base64"));
+  expect(image.width).toBeGreaterThan(385);
+  expect(image.height).toBeGreaterThan(380);
+  expect(image.opaqueCorner).toBe(true);
+  expect(image.hasDataPoint).toBe(true);
+});
+
+test("a manually excluded point stays out of the fit after editing and reload", async ({ page }) => {
+  await open(page);
+  await setRange(page, "1.5", "3");
+  const excluded = page.getByLabel("Exclude row 31 from fit", { exact: true });
+  await excluded.check();
+  expect(await includedRowCount(page)).toBe(30);
+  expect(await copiedResults(page)).toContain("Points used: 30");
+
+  await page.getByLabel("Delete row 1", { exact: true }).click();
+  const shifted = page.getByLabel("Exclude row 30 from fit", { exact: true });
+  await expect(shifted).toBeChecked();
+  const cell = page.getByLabel("Position (m), row 30", { exact: true });
+  await cell.fill("1,23");
+  await cell.press("Enter");
+
+  await open(page);
+  await expect(shifted).toBeChecked();
+  await expect(cell).toHaveValue("1,23");
+  expect(await includedRowCount(page)).toBe(59);
+
+  const [download] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
+  const exported = readFileSync(await download.path(), "utf8").split("\n");
+  expect(exported[30]).toMatch(/^1\.5,1\.23,0,[^,]+,$/);
+
+  await shifted.uncheck();
+  expect(await includedRowCount(page)).toBe(60);
+});
+
+test("inverse fits skip zero and leave its prediction blank in CSV", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Distance (m),Signal (V)\n-2,0\n-1,-2\n0,99\n1,6\n2,4\n4,3");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await page.getByRole("radio", { name: "Inverse", exact: true }).dispatchEvent("click");
+  await expect(page.getByRole("status")).toContainText("1 skipped (undefined reciprocal x)");
+  expect(await includedRowCount(page)).toBe(5);
+  const summary = await copiedResults(page);
+  expect(summary).toContain("y = A/x + B");
+  expect(parameter(summary, "A")).toBeCloseTo(4);
+  expect(summary).toMatch(/^A = .* V·m$/m);
+  const [download] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
+  expect(readFileSync(await download.path(), "utf8").split("\n")[3]).toBe("0,99,0,,");
+});
+
+test("a y uncertainty column enables weighting and flags unusable uncertainties", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Time (s),Position (m),Sigma (m)\n0,1,1\n1,2,1\n2,5,2\n3,6,0");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  const uncertainty = page.getByLabel("Y uncertainty (σ)", { exact: true });
+  await uncertainty.selectOption("2");
+  await expect(page.getByRole("status")).toContainText("1 skipped (invalid y uncertainty)");
+  const summary = await copiedResults(page);
+  expect(summary).toContain("Points used: 3");
+  expect(summary).toContain("Reduced χ² = 0.4444");
+  expect(await includedRowCount(page)).toBe(3);
+  await uncertainty.selectOption("-1");
+  expect(await includedRowCount(page)).toBe(4);
+});
+
+test("calculated columns can be edited, fitted, and restored", async ({ page }) => {
+  await open(page);
+  await pressButton(page, "Calculated column");
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Column name").fill("Scaled time");
+  await dialog.getByLabel("Unit (optional)").fill("s");
+  await dialog.getByLabel("Formula", { exact: true }).fill("2*C1");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(dialog).toHaveCount(0);
+  const calculated = page.getByLabel("Scaled time (s), row 3", { exact: true });
+  await expect(calculated).toHaveValue("0.2");
+  await expect(calculated).not.toBeEditable();
+  await page.getByLabel("Column on the y axis").selectOption("2");
+  expect(parameter(await copiedResults(page), "m")).toBeCloseTo(2);
+  await page.getByLabel("Edit formula · Scaled time (s)", { exact: true }).click();
+  await dialog.getByLabel("Formula", { exact: true }).fill("3*C1");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect.poll(async () => Number(await calculated.inputValue())).toBeCloseTo(0.3);
+  await open(page);
+  await expect.poll(async () => Number(await calculated.inputValue())).toBeCloseTo(0.3);
+});
+
+test("a pinned fit can be compared against another range and clears on table edits", async ({ page }) => {
+  await open(page);
+  const pin = page.getByRole("button", { name: "Pin fit", exact: true });
+  await expect(pin).toBeDisabled();
+  await setRange(page, "1.5", "3");
+  await pressButton(page, "Pin fit");
+  await setRange(page, "0", "1.5");
+  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+
+  const summary = await copiedResults(page);
+  expect(summary).toContain("Current fit\nQuadratic:");
+  expect(summary).toContain("Pinned fit\nLinear:");
+  expect(summary).toContain("Pinned range: 1.500 s to 3.000 s");
+  expect(parameter(summary, "m")).toBeCloseTo(0.9, 1);
+
+  await pressButton(page, "Compare fits");
+  const comparison = page.getByRole("dialog", { name: "Compare fits" });
+  await expect(comparison).toContainText("Current fit");
+  await expect(comparison).toContainText("Pinned fit");
+  await comparison.getByRole("button", { name: "Close" }).click();
+  await pressButton(page, "Remove pin");
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeDisabled();
+
+  await pressButton(page, "Pin fit");
+  await pressButton(page, "Add row");
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeDisabled();
+});
+
+test("log axes preserve the fit and a graph drag selects bounds in data units", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Distance (m),Signal (V)\n0,-1\n1,2\n10,11\n100,101\n1000,1001");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  const before = await copiedResults(page);
+  const toggle = (name: string) => page.getByRole("checkbox", { name, exact: true }).dispatchEvent("click");
+  await toggle("Log x");
+  await toggle("Log y");
+  await expect(page.getByRole("status")).toContainText("Hidden points on log axes (1)");
+  expect(await includedRowCount(page)).toBe(5);
+  expect(await copiedResults(page)).toBe(before);
+
+  const at = (exponent: number) => PLOT.left + ((exponent + 0.12) / 3.24) * PLOT.width;
+  const y = PLOT.top + PLOT.height / 2;
+  await page.mouse.move(at(0.5), y);
+  await page.mouse.down();
+  await page.mouse.move(at(2.5), y, { steps: 8 });
+  await page.mouse.up();
+  expect(Number(await page.getByLabel("Range minimum").inputValue())).toBeCloseTo(10 ** 0.5, 0);
+  expect(Number(await page.getByLabel("Range maximum").inputValue())).toBeGreaterThan(300);
+  expect(await includedRowCount(page)).toBe(2);
+  await page.mouse.move(at(1), y);
+  await page.mouse.wheel(0, -100);
+  expect(await includedRowCount(page)).toBe(2);
+  await pressButton(page, "Reset All");
+  await expect(page.getByRole("checkbox", { name: "Log x", exact: true })).not.toBeChecked();
+  expect(await includedRowCount(page)).toBe(5);
+});
+
+test("range analysis reports a measured linear slope and signed area", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Time (s),Position (m)\n0,1\n1,3\n2,5\n3,7");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await setRange(page, "1", "3");
+  await pressButton(page, "Range analysis");
+  const analysis = page.getByRole("dialog", { name: "Range analysis" });
+  await expect(analysis).toContainText("2.000 m/s");
+  await expect(analysis).toContainText("10.00 m·s");
+  await expect(analysis).toContainText("5.000 m");
+  await analysis.getByRole("button", { name: "Close" }).click();
+  await expect(analysis).toHaveCount(0);
+});
+
+test("session files restore measurements, axis settings, and both fits", async ({ page }) => {
+  await open(page);
+  await setRange(page, "1.5", "3");
+  await pressButton(page, "Pin fit");
+  await setRange(page, "0", "1.5");
+  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+  const log = page.getByRole("checkbox", { name: "Log x", exact: true });
+  await log.dispatchEvent("click");
+  const [file] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Save session")]);
+  expect(file.suggestedFilename()).toBe("data-lab.session.json");
+  const saved = readFileSync(await file.path());
+  await pressButton(page, "Add row");
+  await expect(page.locator("tbody tr")).toHaveCount(62);
+  await pressButton(page, "Reset All");
+
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), pressButton(page, "Open session")]);
+  await chooser.setFiles({ name: file.suggestedFilename(), mimeType: "application/json", buffer: saved });
+  await expect(log).toBeChecked();
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+  await expect(page.getByLabel("Range maximum")).toHaveValue("1.5");
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeEnabled();
+  expect(await copiedResults(page)).toContain("Pinned range: 1.500 s to 3.000 s");
+
+  const [invalid] = await Promise.all([page.waitForEvent("filechooser"), pressButton(page, "Open session")]);
+  await invalid.setFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from("{}") });
+  await expect(page.getByRole("status")).toContainText("This file is not a supported Data Lab session.");
+  await expect(log).toBeChecked();
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+  await expect(page.getByLabel("Range maximum")).toHaveValue("1.5");
+});
+
+test("exponential fits use original measurements and export their predictions", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    const rows = [0, 1, 2, 3, 4].map((t) => `${10 + t},${4 * Math.exp(-0.5 * t)}`);
+    data.setData("text/plain", ["Time (s),Signal (V)", ...rows].join("\n"));
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await page.getByRole("radio", { name: "Exponential", exact: true }).dispatchEvent("click");
+  const summary = await copiedResults(page);
+  expect(summary).toContain("Exponential: y = A·exp(k·(x − x₀))");
+  expect(summary).toMatch(/^k = .* 1\/s$/m);
+  expect(summary).toContain("Points used: 5");
+  const [download] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
+  const row = readFileSync(await download.path(), "utf8")
+    .split("\n")[3]
+    ?.split(",");
+  expect(Number(row?.[3])).toBeCloseTo(4 * Math.exp(-1), 10);
+  expect(Number(row?.[4])).toBeCloseTo(0, 10);
+});
+
+test("named runs keep separate data and analysis and round-trip together", async ({ page }) => {
+  await open(page);
+  const active = page.getByLabel("Active run", { exact: true });
+  await setRange(page, "1.5", "3");
+  await pressButton(page, "Pin fit");
+  await page.getByRole("checkbox", { name: "Log x", exact: true }).dispatchEvent("click");
+  await pressButton(page, "New run");
+  await expect(active).toHaveValue("1");
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Time (s),Signal (V)\n0,5\n1,6\n2,8");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await setRange(page, "0", "2");
+  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+  await pressButton(page, "Manage run");
+  const manager = page.getByRole("dialog", { name: "Manage run" });
+  await manager.getByLabel("Run name").fill("Trial B");
+  await manager.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(active.locator("option:checked")).toHaveText("Trial B");
+
+  await active.selectOption("0");
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+  await expect(page.getByLabel("Range minimum")).toHaveValue("1.5");
+  await expect(page.getByRole("checkbox", { name: "Log x", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeEnabled();
+  await active.selectOption("1");
+  await expect(page.locator("tbody tr")).toHaveCount(3);
+  await expect(page.getByRole("radio", { name: "Quadratic" })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeDisabled();
+
+  const [file] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Save session")]);
+  const saved = readFileSync(await file.path());
+  await pressButton(page, "Manage run");
+  await manager.getByRole("button", { name: "Delete run", exact: true }).click();
+  await expect(manager.getByRole("heading")).toHaveText("Delete “Trial B”?");
+  await manager.getByRole("button", { name: "Delete run", exact: true }).click();
+  await expect(active.locator("option")).toHaveCount(1);
+
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), pressButton(page, "Open session")]);
+  await chooser.setFiles({ name: file.suggestedFilename(), mimeType: "application/json", buffer: saved });
+  await expect(active.locator("option:checked")).toHaveText("Trial B");
+  await expect(page.getByLabel("Signal (V), row 3", { exact: true })).toHaveValue("8");
+  await expect(page.getByRole("radio", { name: "Quadratic" })).toBeChecked();
+  await active.selectOption("0");
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeEnabled();
+});
+
+test("rectangle drag constrains both axes and feeds the fit and CSV", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "x,y\n0,0\n1,1\n2,2\n2,8\n3,3\n4,4");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await page.getByRole("checkbox", { name: "Rectangle", exact: true }).dispatchEvent("click");
+  const px = (x: number) => PLOT.left + ((x + 0.16) / 4.32) * PLOT.width;
+  const py = (y: number) => PLOT.top + ((8.64 - y) / 9.28) * PLOT.height;
+  await page.mouse.move(px(3.5), py(3.5));
+  await page.mouse.down();
+  await page.mouse.move(px(0.5), py(0.5), { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByRole("status")).toContainText("Using 3 of 6 rows");
+  await expect(page.getByRole("status")).toContainText("y from");
+  const [file] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
+  expect(readFileSync(await file.path(), "utf8")).toContain("2,8,0,");
+  const maxY = page.getByLabel("Selection y maximum");
+  await maxY.fill("9");
+  await maxY.press("Enter");
+  await expect(page.getByRole("status")).toContainText("Using 4 of 6 rows");
+  const [saved] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Save session")]);
+  await pressButton(page, "Clear range");
+  await expect(maxY).toHaveValue("");
+  const minY = page.getByLabel("Selection y minimum");
+  await minY.fill("0.5");
+  await minY.press("Enter");
+  await maxY.fill("4.5");
+  await maxY.press("Enter");
+  await expect(page.getByRole("status")).toContainText("Using 4 of 6 rows");
+
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), pressButton(page, "Open session")]);
+  await chooser.setFiles({
+    name: saved.suggestedFilename(),
+    mimeType: "application/json",
+    buffer: readFileSync(await saved.path()),
+  });
+  await expect(maxY).toHaveValue("9");
+});
+
+test("PASCO Smart Cart capture turns signed samples into a new run", async ({ page }) => {
+  await page.addInitScript(() => {
+    const reader = Object.assign(new EventTarget(), {
+      value: new DataView(new ArrayBuffer(5)),
+      startNotifications: () => Promise.resolve(),
+    });
+    Object.defineProperty(navigator, "bluetooth", {
+      value: {
+        requestDevice: (options: { filters: { namePrefix: string }[]; optionalServices: string[] }) => {
+          const serviceId = "4a5c0003-0000-0000-0000-5c1e741f1c00";
+          if (options.filters[0]?.namePrefix !== "Smart Cart" || !options.optionalServices.includes(serviceId)) {
+            throw new Error("Wrong filter");
+          }
+          const writer = {
+            properties: { write: true },
+            writeValueWithResponse: (command: Uint8Array) => {
+              if (String(command) !== "5,2") {
+                throw new Error("Wrong sample request");
+              }
+              reader.value.setUint8(0, 0xc0);
+              reader.value.setUint8(2, 5);
+              reader.value.setInt16(3, -816, true);
+              reader.dispatchEvent(new Event("characteristicvaluechanged"));
+              return Promise.resolve();
+            },
+          };
+          const gatt = {
+            connect: (): Promise<unknown> => Promise.resolve(gatt),
+            disconnect: () => undefined,
+            getPrimaryService: (id: string) => {
+              if (id !== serviceId) {
+                throw new Error("Wrong service");
+              }
+              return Promise.resolve({
+                getCharacteristic: (characteristic: string) =>
+                  Promise.resolve(characteristic.includes("-0002-") ? writer : reader),
+              });
+            },
+          };
+          return Promise.resolve(Object.assign(new EventTarget(), { name: "Smart Cart Test", gatt }));
+        },
+      },
+    });
+  });
+  await open(page);
+  await pressButton(page, "PASCO");
+  const dialog = page.getByRole("dialog", { name: "PASCO" });
+  await dialog.getByRole("button", { name: "Connect and record" }).click();
+  await expect(dialog.getByRole("status")).toContainText(/Samples: [2-9]\d*|Samples: [1-9]\d+/);
+  await dialog.getByRole("button", { name: "Stop", exact: true }).click();
+  await dialog.getByRole("button", { name: "Use recording" }).click();
+  const active = page.getByLabel("Active run", { exact: true });
+  await expect(active.locator("option:checked")).toHaveText("Smart Cart Test");
+  await expect(page.getByLabel("Position (m), row 1", { exact: true })).toHaveValue("0");
+  expect(Number(await page.getByLabel("Position (m), row 2", { exact: true }).inputValue())).toBeCloseTo(-0.09895, 8);
+  await active.selectOption("0");
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+});

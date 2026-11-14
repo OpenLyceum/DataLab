@@ -37,6 +37,8 @@ Table details worth knowing:
 
 - The DOM is rebuilt only when the row or column count changes; otherwise cell
   text is patched in place and the focused input is left alone.
+- Each row has a delete button and each column header has a remove button. The
+  table keeps at least one column so students can continue entering data.
 - A cell commits on `change` (blur or Enter). Enter and ↓ move down, ↑ moves up,
   Escape restores the model's text.
 - A paste containing a tab or newline is treated as a block and written through
@@ -87,25 +89,76 @@ the valid points.
 Done: scaffold; CSV, paste and drag-and-drop import; units from headers; editable
 table; column choosers; range by drag, handles, keyboard and numeric fields;
 proportional, linear and quadratic fits with standard errors, RMSE and R²;
-residual graph; CSV export; copy results; zoom to range; wheel and pinch zoom,
-pan and auto scale on both axes.
+residual graph; CSV and graph PNG export; copy results; zoom to range; wheel
+and pinch zoom, pan and auto scale on both axes; add and delete rows and
+columns; fit status live region; GitHub repository, fleet catalog entry, screenshot and icon.
 
 Remaining for 0.1:
 
-- PNG export of the graph.
-- Announce the status line through a live region; bring the HTML controls into
-  the reading order.
-- Delete-row control; column add/remove.
+- Bring the HTML controls into the reading order.
 - Check the table in Firefox, Safari, on an iPad and with a screen reader
   (only Chromium has been exercised).
-- Fleet onboarding: GitHub repo, catalog entry, screenshot, icon.
 
-0.2: weighted fits, error bars and reduced χ²; calculated columns; per-row
-exclusion; pinned fits (two ranges at once); inverse, inverse-square and cubic
-models; log axes; restore the table after a reload.
+Done for 0.2: cubic, inverse and inverse-square fits, per-row exclusion, and
+local table recovery after a reload. The reciprocal models include a fitted
+constant offset. Undefined reciprocal x values are skipped and reported. Exclusions survive table edits and reloads, and are reflected in the
+graph, fit, residuals and CSV export. Recovery includes committed cells, headers
+and exclusions. The fit range and zoom start at their defaults on reload.
 
-0.3: nonlinear models (Levenberg–Marquardt); multiple runs; session files;
-statistics, slope and area on a range.
+Also done for 0.2: weighted fits with a y-uncertainty column, vertical error bars,
+and reduced χ².
 
-Later: sensor capture over Web Bluetooth; rectangle selection; PDF report;
-a shared fleet package for graph, table and fit code.
+Calculated columns accept arithmetic, powers and common functions. Formulas
+reference earlier columns by position (`C1`, `C2`, …), recalculate after table
+edits, and survive reload. Calculated cells are read-only and export as values.
+A source column stays protected while a formula references it.
+
+A successful fit over a selected range can be pinned while a second range or
+model is fitted. The pin is a snapshot shown as a dashed curve and included in
+the comparison and copied results. Table edits, axis changes and Reset All clear
+the pin. The residual plot and CSV describe the current fit.
+
+Log x and Log y independently change the main plot to base-10 scales. Nonpositive
+points on a logarithmic axis are hidden from the graph and counted in the status
+announcement. Fit selection, regression, and CSV export still use the original
+measurements. The residual plot follows the x scale and keeps its residual axis
+linear. Error bars that cross zero on log y are clipped at the graph edge.
+
+All 0.2 features are implemented.
+
+Done for 0.3: versioned JSON session files and range statistics, slope, and
+signed area. Sessions restore table data, formulas, exclusions, axes, log
+scales, residual visibility, fit configuration, range, and the pinned fit.
+Graph zoom is recalculated on open. Range analysis uses valid x–y pairs in
+the selected range, omits manually excluded rows, and uses an unweighted
+linear slope independent of the fit settings. Trapezoids join consecutive
+measured x values after averaging measurements with repeated x.
+
+Nonlinear fitting starts with an exponential growth or decay model. It uses
+Levenberg–Marquardt on the original y measurements and supports the optional y
+uncertainty column. The reference x₀ is fixed to the smallest x in the fit.
+
+Multiple named runs keep independent tables, axes, ranges, model settings, and
+pinned fits. New runs start with a blank table and can be renamed or deleted.
+The graph, range analysis, and individual CSV/PNG exports use the active run.
+Version 2 session files include all runs and the active run. Version 1 files
+open as a single run. Browser reload recovery restores the active table.
+Save a session file to reopen the whole workspace.
+
+All 0.3 roadmap items are implemented.
+
+0.4 work includes rectangle selection and PASCO Bluetooth capture. Rectangle
+selection stores inclusive x and y bounds in data units. It works with log
+display, fits, pinning, range analysis, and session files. The x and y fields
+provide a keyboard alternative to dragging. Changing the y column clears the
+y bounds, leaving the x range in place.
+
+PASCO capture currently supports the Smart Cart position channel. Data Lab
+polls the encoder at up to 10 Hz, accumulates signed position increments in
+metres relative to the first sample, and timestamps each response in the
+browser. The recording opens in a new run. The channel and conversion are
+documented in [PASCO’s Python library](https://github.com/PASCOscientific/pasco_python).
+Capture requires a browser and platform with Web Bluetooth support. The
+protocol and capture workflow were exercised with a simulated GATT device.
+
+Later: PDF report and a shared fleet package for graph, table and fit code.

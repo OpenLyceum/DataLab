@@ -51,3 +51,24 @@ export function paddedRange(min: number, max: number, fraction: number): Range {
   const padding = (max - min) * fraction;
   return new Range(min - padding, max + padding);
 }
+
+/** Graph coordinates for a base-10 axis. Nonpositive measurements cannot be drawn. */
+export function axisCoordinate(value: number, logarithmic: boolean): number {
+  return logarithmic && value <= 0 ? Number.NaN : logarithmic ? Math.log10(value) : value;
+}
+
+const LOG_MIN = Math.log10(Number.MIN_VALUE);
+const LOG_MAX = Math.log10(Number.MAX_VALUE);
+
+export function axisValue(coordinate: number, logarithmic: boolean): number {
+  if (!logarithmic) {
+    return coordinate;
+  }
+  return coordinate >= LOG_MAX ? Number.MAX_VALUE : 10 ** Math.max(LOG_MIN, coordinate);
+}
+
+export function limitLogRange(range: Range): Range {
+  const min = Math.max(LOG_MIN, range.min);
+  const max = Math.min(LOG_MAX, range.max);
+  return min < max ? new Range(min, max) : new Range(0, 1);
+}

@@ -20,7 +20,8 @@ import { Shape } from "scenerystack/kite";
 import { DragListener, KeyboardListener, Line, Node, Path, Rectangle } from "scenerystack/scenery";
 import { columnLabel } from "../../common/model/Dataset.js";
 import type { XRange } from "../../common/model/includedRows.js";
-import { evaluateFit } from "../../common/model/leastSquares.js";
+import { evaluateFit, type FitSuccess, usesReciprocalX } from "../../common/model/leastSquares.js";
+import { axisCoordinate, axisValue } from "../../common/view/axisRange.js";
 import { ChartFrameNode } from "../../common/view/ChartFrameNode.js";
 import { installGraphGestures } from "../../common/view/GraphGestures.js";
 import { PointsCanvasNode } from "../../common/view/PointsCanvasNode.js";
@@ -70,6 +71,12 @@ export class PlotNode extends Node {
       lineWidth: 2,
       pickable: false,
     });
+    const pinnedCurve = new Path(null, {
+      stroke: DataLabColors.pinnedFitColorProperty,
+      lineWidth: 2,
+      lineDash: [6, 4],
+      pickable: false,
+    });
     const band = new Rectangle(0, 0, 1, viewHeight, {
       fill: DataLabColors.rangeBandColorProperty,
       cursor: "grab",
@@ -77,10 +84,19 @@ export class PlotNode extends Node {
     frame.plotLayer.addChild(band);
     frame.plotLayer.addChild(points);
     frame.plotLayer.addChild(fitCurve);
+    frame.plotLayer.addChild(pinnedCurve);
 
+    const toX = (value: number) => axisCoordinate(value, graphView.logXProperty.value);
+    const fromX = (value: number) => axisValue(value, graphView.logXProperty.value);
+    const toY = (value: number) => axisCoordinate(value, graphView.logYProperty.value);
     const xFromPointer = (globalPoint: { x: number; y: number }): number => {
       const viewX = clamp(frame.plotLayer.globalToLocalPoint(globalPoint as never).x, 0, viewWidth);
-      return chartTransform.viewToModelX(viewX);
+      return fromX(chartTransform.viewToModelX(viewX));
+    };
+
+    const yFromPointer = (globalPoint: { x: number; y: number }): number => {
+      const local = frame.plotLayer.globalToLocalPoint(globalPoint as never);
+      return axisValue(chartTransform.viewToModelY(clamp(local.y, 0, viewHeight)), graphView.logYProperty.value);
     };
 
     // A second finger turns a one-finger range gesture into a pinch: the gesture is
@@ -132,7 +148,7 @@ export class PlotNode extends Node {
           const range = model.rangeProperty.value;
           anchor = range ? (isStart ? range.max : range.min) : 0;
         },
-        drag: (event) => model.setRange(anchor, xFromPointer(event.pointer.point)),
+        drag: (event) => model.setRange(anchor, xFromPointer(event.pointer.point), model.rangeProperty.value?.y),
         end: endRangeGesture,
       });
       rangeListeners.push(handleListener);
@@ -141,7 +157,7 @@ export class PlotNode extends Node {
       const moveTo = (x: number) => {
         const range = model.rangeProperty.value;
         if (range) {
-          model.setRange(isStart ? range.max : range.min, x);
+          model.setRange(isStart ? range.max : range.min, x, range.y);
         }
       };
       handle.addInputListener(
@@ -150,7 +166,7 @@ export class PlotNode extends Node {
           fireOnHold: true,
           fire: (_event, keysPressed) => {
             const range = model.rangeProperty.value;
-            const values = model.distinctXValues();
+            const values = model.distinctXValues().filter((value) => Number.isFinite(toX(value)));
             if (!range || values.length === 0) {
               return;
             }
@@ -175,10 +191,10 @@ export class PlotNode extends Node {
                 moveTo(stepPoints(1));
                 break;
               case "shift+arrowLeft":
-                moveTo(current - fineStep);
+                moveTo(fromX(toX(current) - fineStep));
                 break;
               case "shift+arrowRight":
-                moveTo(current + fineStep);
+                moveTo(fromX(toX(current) + fineStep));
                 break;
               case "pageDown":
                 moveTo(stepPoints(-PAGE_POINTS));
@@ -208,6 +224,7 @@ export class PlotNode extends Node {
     // ── Sweep a new range across empty plot area ──────────────────────────────
     // With Shift held, the same drag pans both axes instead.
     let sweepStart = 0;
+    let sweepY = 0;
     let isPanning = false;
     let panStart = { x: 0, y: 0 };
     let panXRange = graphView.xAxisRangeProperty.value;
@@ -222,6 +239,7 @@ export class PlotNode extends Node {
         } else {
           beginRangeGesture();
           sweepStart = xFromPointer(event.pointer.point);
+          sweepY = yFromPointer(event.pointer.point);
         }
       },
       drag: (event) => {
@@ -230,7 +248,14 @@ export class PlotNode extends Node {
           graphView.panX(panXRange, (-(point.x - panStart.x) * panXRange.getLength()) / viewWidth);
           graphView.panY(panYRange, ((point.y - panStart.y) * panYRange.getLength()) / viewHeight);
         } else {
-          model.setRange(sweepStart, xFromPointer(event.pointer.point));
+          const y = yFromPointer(event.pointer.point);
+          model.setRange(
+            sweepStart,
+            xFromPointer(event.pointer.point),
+            graphView.rectangleSelectionProperty.value
+              ? { min: Math.min(sweepY, y), max: Math.max(sweepY, y) }
+              : undefined,
+          );
         }
       },
       end: endRangeGesture,
@@ -252,7 +277,7 @@ export class PlotNode extends Node {
       },
       drag: (event) => {
         const min = xFromPointer(event.pointer.point) - grabOffset;
-        model.setRange(min, min + grabWidth);
+        model.setRange(min, min + grabWidth, model.rangeProperty.value?.y);
       },
       end: endRangeGesture,
     });
@@ -267,58 +292,109 @@ export class PlotNode extends Node {
     // ── Updates ───────────────────────────────────────────────────────────────
     const updateRange = () => {
       const range = model.rangeProperty.value;
-      band.visible = range !== null;
+      const axisMin = range ? toX(range.min) : Number.NaN;
+      const axisMax = range ? toX(range.max) : Number.NaN;
+
       // An edge scrolled out of view is not offered as a handle. Visibility is set
       // once per edge: hiding and re-showing a focused handle would drop its focus.
       const inView = (x: number) => x >= -1 && x <= viewWidth + 1;
-      const x0 = range ? chartTransform.modelToViewX(range.min) : 0;
-      const x1 = range ? chartTransform.modelToViewX(range.max) : 0;
-      if (range) {
-        band.setRect(x0, 0, Math.max(x1 - x0, 1), viewHeight);
-        rangeStartHandle.x = x0;
+      const x0 = Number.isFinite(axisMin) ? chartTransform.modelToViewX(axisMin) : -Infinity;
+      const x1 = Number.isFinite(axisMax) ? chartTransform.modelToViewX(axisMax) : -Infinity;
+      band.visible = Number.isFinite(x1) && x1 >= 0 && x0 <= viewWidth;
+      if (band.visible) {
+        const start = clamp(x0, 0, viewWidth);
+        const top = range?.y ? toY(range.y.max) : NaN;
+        const bottom = range?.y ? toY(range.y.min) : NaN;
+        const y0 = Number.isFinite(top) ? clamp(chartTransform.modelToViewY(top), 0, viewHeight) : 0;
+        const y1 = Number.isFinite(bottom) ? clamp(chartTransform.modelToViewY(bottom), 0, viewHeight) : viewHeight;
+        band.visible = !range?.y || Number.isFinite(top);
+        band.setRect(start, y0, Math.max(clamp(x1, 0, viewWidth) - start, 1), Math.max(y1 - y0, 1));
+        rangeStartHandle.x = clamp(x0, 0, viewWidth);
         rangeEndHandle.x = x1;
       }
-      rangeStartHandle.visible = range !== null && inView(x0);
-      rangeEndHandle.visible = range !== null && inView(x1);
+      rangeStartHandle.visible = inView(x0);
+      rangeEndHandle.visible = inView(x1);
+    };
+
+    const appendCurveBranch = (shape: Shape, fit: FitSuccess, min: number, max: number) => {
+      let started = false;
+      for (let k = 0; k <= CURVE_SAMPLES; k++) {
+        const x = k === CURVE_SAMPLES ? max : min + ((max - min) * k) / CURVE_SAMPLES;
+        const y = axisCoordinate(evaluateFit(fit.model, fit.parameters, fromX(x)), graphView.logYProperty.value);
+        if (!Number.isFinite(y)) {
+          started = false;
+          continue;
+        }
+        const viewX = chartTransform.modelToViewX(x);
+        const viewY = chartTransform.modelToViewY(y);
+        if (started) {
+          shape.lineTo(viewX, viewY);
+        } else {
+          shape.moveTo(viewX, viewY);
+          started = true;
+        }
+      }
+    };
+
+    const curveShape = (fit: FitSuccess, xValues: readonly number[]): Shape => {
+      // Reciprocal curves have separate branches on either side of zero.
+      const branches = usesReciprocalX(fit.model)
+        ? [xValues.filter((x) => x < 0), xValues.filter((x) => x > 0)]
+        : [xValues];
+      const shape = new Shape();
+      const visible = graphView.xAxisRangeProperty.value;
+      for (const branch of branches) {
+        const extent = branch.reduce((bounds, x) => ({ min: Math.min(bounds.min, x), max: Math.max(bounds.max, x) }), {
+          min: Number.POSITIVE_INFINITY,
+          max: Number.NEGATIVE_INFINITY,
+        });
+        const min = Math.max(
+          graphView.logXProperty.value && extent.min <= 0 ? visible.min : toX(extent.min),
+          visible.min,
+        );
+        const max = Math.min(toX(extent.max), visible.max);
+        if (!(min < max)) {
+          continue;
+        }
+        appendCurveBranch(shape, fit, min, max);
+      }
+      return shape;
     };
 
     const updateCurve = () => {
       const fit = model.fitProperty.value;
-      const xColumn = model.xColumnProperty.value;
+      const x = model.xColumnProperty.value;
       const indices = model.inclusionProperty.value.indices;
-      if (!(fit.ok && xColumn) || indices.length === 0) {
-        fitCurve.shape = null;
-        return;
-      }
-      // The curve spans the points it was fitted to, and no further.
-      let min = Number.POSITIVE_INFINITY;
-      let max = Number.NEGATIVE_INFINITY;
-      for (const i of indices) {
-        const x = xColumn.values[i] as number;
-        min = Math.min(min, x);
-        max = Math.max(max, x);
-      }
-      const shape = new Shape();
-      for (let k = 0; k <= CURVE_SAMPLES; k++) {
-        const x = min + ((max - min) * k) / CURVE_SAMPLES;
-        const viewX = chartTransform.modelToViewX(x);
-        const viewY = chartTransform.modelToViewY(evaluateFit(fit.model, fit.parameters, x));
-        if (k === 0) {
-          shape.moveTo(viewX, viewY);
-        } else {
-          shape.lineTo(viewX, viewY);
-        }
-      }
-      fitCurve.shape = shape;
+      fitCurve.shape =
+        fit.ok && x
+          ? curveShape(
+              fit,
+              indices.map((index) => x.values[index] as number),
+            )
+          : null;
+    };
+
+    const updatePinnedCurve = () => {
+      const pin = model.pinnedFitProperty.value;
+      pinnedCurve.shape = pin ? curveShape(pin.fit, pin.xValues) : null;
     };
 
     const updateAxes = () => {
       const xColumn = model.xColumnProperty.value;
       const yColumn = model.yColumnProperty.value;
-      frame.setRanges(graphView.xAxisRangeProperty.value, graphView.yAxisRangeProperty.value);
+      const logX = graphView.logXProperty.value;
+      const logY = graphView.logYProperty.value;
+      frame.setRanges(graphView.xAxisRangeProperty.value, graphView.yAxisRangeProperty.value, logX, logY);
       frame.xAxisLabel.string = xColumn ? columnLabel(xColumn) : "";
       frame.yAxisLabel.string = yColumn ? columnLabel(yColumn) : "";
-      points.setPoints(xColumn?.values ?? [], yColumn?.values ?? [], model.inclusionProperty.value.flags);
+      points.setPoints(
+        xColumn?.values ?? [],
+        yColumn?.values ?? [],
+        model.inclusionProperty.value.flags,
+        model.uncertaintyColumnProperty.value?.values,
+        logX,
+        logY,
+      );
     };
 
     Multilink.multilink(
@@ -326,15 +402,23 @@ export class PlotNode extends Node {
         model.xColumnProperty,
         model.yColumnProperty,
         model.inclusionProperty,
+        model.uncertaintyColumnProperty,
         graphView.xAxisRangeProperty,
         graphView.yAxisRangeProperty,
+        graphView.logXProperty,
+        graphView.logYProperty,
       ],
       () => {
         updateAxes();
         updateRange();
         updateCurve();
+        updatePinnedCurve();
       },
     );
+    model.pinnedFitProperty.lazyLink(updatePinnedCurve);
+    graphView.rectangleSelectionProperty.link((rectangle) => {
+      band.pickable = !rectangle;
+    });
     model.rangeProperty.lazyLink(updateRange);
     model.fitProperty.lazyLink(updateCurve);
   }

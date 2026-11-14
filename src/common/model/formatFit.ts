@@ -13,6 +13,10 @@ export const MODEL_SYMBOLS: Record<FitModelValue, readonly string[]> = {
   proportional: ["A"],
   linear: ["m", "b"],
   quadratic: ["A", "B", "C"],
+  cubic: ["A", "B", "C", "D"],
+  inverse: ["A", "B"],
+  inverseSquare: ["A", "B"],
+  exponential: ["A", "k", "x₀"],
 };
 
 /** The model written out. Mathematical notation, the same in every language. */
@@ -20,9 +24,13 @@ export const MODEL_EQUATIONS: Record<FitModelValue, string> = {
   proportional: "y = A·x",
   linear: "y = m·x + b",
   quadratic: "y = A·x² + B·x + C",
+  cubic: "y = A·x³ + B·x² + C·x + D",
+  inverse: "y = A/x + B",
+  inverseSquare: "y = A/x² + B",
+  exponential: "y = A·exp(k·(x − x₀))",
 };
 
-export const FIT_MODELS: readonly FitModelValue[] = [FitModel.PROPORTIONAL, FitModel.LINEAR, FitModel.QUADRATIC];
+export const FIT_MODELS: readonly FitModelValue[] = Object.values(FitModel);
 
 /** Significant figures kept in an uncertainty, and so in the value it belongs to. */
 const UNCERTAINTY_DIGITS = 2;
@@ -63,6 +71,10 @@ function needsParentheses(unit: string): boolean {
 export function parameterUnit(xUnit: string, yUnit: string, power: number): string {
   if (power === 0 || xUnit === "") {
     return yUnit;
+  }
+  if (power < 0) {
+    const factor = `${needsParentheses(xUnit) ? `(${xUnit})` : xUnit}${power === -1 ? "" : superscript(-power)}`;
+    return yUnit === "" ? factor : `${yUnit}·${factor}`;
   }
   const denominator = `${needsParentheses(xUnit) ? `(${xUnit})` : xUnit}${power === 1 ? "" : superscript(power)}`;
   const numerator = yUnit === "" ? "1" : needsParentheses(yUnit) ? `(${yUnit})` : yUnit;

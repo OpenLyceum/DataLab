@@ -84,3 +84,37 @@ The fit engine reproduces the certified parameter estimates, standard deviations
 and residual standard deviation of four NIST Statistical Reference Datasets
 (Norris, Pontius, NoInt1, NoInt2) to nine significant digits; see
 `tests/fixtures/nist/README.md`.
+
+
+## Cubic and reciprocal models
+
+The cubic model extends the polynomial design matrix to degree three.
+The inverse and inverse-square models use the same linear solver with
+predictors \(1/x\) and \(1/x^2\), respectively, and a free intercept.
+The residuals and RMSE remain in the original y units. Measurements whose
+reciprocal predictor is undefined remain in the table and scatter plot.
+The fit and residual plot omit those rows, and CSV leaves both prediction
+and residual blank for them.
+
+## Weighted fits
+
+The optional y-uncertainty column contains positive standard uncertainties in
+the same units as y. Each design row and its y value are scaled by
+`min(σ) / σᵢ` before QR, which gives the same solution as weights `1 / σᵢ²`.
+Rows with missing, zero or negative uncertainties do not enter a weighted fit.
+The graph draws y ± σ where the uncertainty is valid.
+
+Parameter uncertainties use the supplied σ as absolute standard deviations.
+They are not scaled by the reduced χ². Reduced χ² is the sum of squared
+standardized residuals divided by n − p, and is reported only when n > p.
+RMSE and exported residuals stay in y units.
+
+## Exponential fit
+
+Data Lab fits `y = A·exp(k·(x − x₀))`, with x₀ fixed at the smallest included
+x. The amplitude A is the modeled y at that reference, and k has inverse x
+units. Levenberg–Marquardt minimizes the original-y residuals using damped QR
+steps. The log of the magnitude of y provides only a starting estimate, so
+zero and negative observations still enter the objective. The final Jacobian
+provides local parameter uncertainties. If an uncertainty column is selected,
+the same absolute-σ convention and reduced χ² as for weighted linear fits apply.

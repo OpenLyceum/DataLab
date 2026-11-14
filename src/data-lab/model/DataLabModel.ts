@@ -13,19 +13,41 @@
 import { DerivedProperty, NumberProperty, Property, type TReadOnlyProperty } from "scenerystack/axon";
 import type { TModel } from "scenerystack/joist";
 import {
+  addColumn,
   addRow,
   type Column,
   type Dataset,
+  deleteColumn,
   deleteRow,
   isNumericColumn,
   pasteBlock,
+  setCalculatedColumn,
   setCell,
   setColumnHeader,
+  setRowExcluded,
 } from "../../common/model/Dataset.js";
 import { type Inclusion, includedRows, orderedRange, type XRange } from "../../common/model/includedRows.js";
-import { FitModel, type FitModelValue, type FitResult, fitModel } from "../../common/model/leastSquares.js";
+import {
+  FitModel,
+  type FitModelValue,
+  type FitResult,
+  type FitSuccess,
+  fitModel,
+} from "../../common/model/leastSquares.js";
 import { parseTable } from "../../common/model/parseTable.js";
+import { restoreDataset, saveDataset } from "./datasetStorage.js";
 import sampleCsv from "./samples/cart-ramp-then-level.csv?raw";
+
+import type { FitSettings, Session } from "./sessionFile.js";
+
+export type PinnedFit = {
+  readonly settings: FitSettings;
+  readonly fit: FitSuccess;
+  readonly range: XRange;
+  readonly xValues: readonly number[];
+  readonly xColumn: Column;
+  readonly yColumn: Column;
+};
 
 export class DataLabModel implements TModel {
   public readonly datasetProperty: Property<Dataset>;
@@ -33,6 +55,9 @@ export class DataLabModel implements TModel {
   /** Index of the column on each axis; −1 when the table has no numeric column to offer. */
   public readonly xColumnIndexProperty = new NumberProperty(-1);
   public readonly yColumnIndexProperty = new NumberProperty(-1);
+
+  public readonly uncertaintyColumnIndexProperty = new NumberProperty(-1);
+  public readonly uncertaintyColumnProperty: TReadOnlyProperty<Column | null>;
 
   /** The selected x interval in data units, or null to use every valid row. */
   public readonly rangeProperty = new Property<XRange | null>(null);
@@ -44,17 +69,40 @@ export class DataLabModel implements TModel {
   public readonly inclusionProperty: TReadOnlyProperty<Inclusion>;
   public readonly fitProperty: TReadOnlyProperty<FitResult>;
 
+  private readonly pinnedFit = new Property<PinnedFit | null>(null);
+  public readonly pinnedFitProperty: TReadOnlyProperty<PinnedFit | null> = this.pinnedFit;
+
+  private reindexingXAxis = false;
+
   public constructor() {
-    this.datasetProperty = new Property<Dataset>(parseTable(sampleCsv).dataset);
+    this.datasetProperty = new Property<Dataset>(restoreDataset() ?? parseTable(sampleCsv).dataset);
     this.chooseDefaultColumns();
 
     const columnAt = (dataset: Dataset, index: number): Column | null => dataset.columns[index] ?? null;
     this.xColumnProperty = new DerivedProperty([this.datasetProperty, this.xColumnIndexProperty], columnAt);
     this.yColumnProperty = new DerivedProperty([this.datasetProperty, this.yColumnIndexProperty], columnAt);
 
+    this.uncertaintyColumnProperty = new DerivedProperty(
+      [this.datasetProperty, this.uncertaintyColumnIndexProperty],
+      columnAt,
+    );
+
+    const noExclusions: readonly number[] = [];
+    const excludedRowsProperty = new DerivedProperty(
+      [this.datasetProperty],
+      (dataset) => dataset.excludedRows ?? noExclusions,
+    );
     this.inclusionProperty = new DerivedProperty(
-      [this.xColumnProperty, this.yColumnProperty, this.rangeProperty],
-      (xColumn, yColumn, range) => includedRows(xColumn?.values ?? [], yColumn?.values ?? [], range),
+      [
+        this.xColumnProperty,
+        this.yColumnProperty,
+        this.rangeProperty,
+        excludedRowsProperty,
+        this.fitModelProperty,
+        this.uncertaintyColumnProperty,
+      ],
+      (xColumn, yColumn, range, excludedRows, model, uncertainty) =>
+        includedRows(xColumn?.values ?? [], yColumn?.values ?? [], range, excludedRows, model, uncertainty?.values),
     );
 
     this.fitProperty = new DerivedProperty(
@@ -62,18 +110,81 @@ export class DataLabModel implements TModel {
       (inclusion, model): FitResult => {
         const xValues = this.xColumnProperty.value?.values ?? [];
         const yValues = this.yColumnProperty.value?.values ?? [];
+        const sigma = this.uncertaintyColumnProperty.value?.values;
         return fitModel(
           model,
           inclusion.indices.map((i) => xValues[i] as number),
           inclusion.indices.map((i) => yValues[i] as number),
+          sigma && inclusion.indices.map((i) => sigma[i] as number),
         );
       },
     );
 
+    this.datasetProperty.lazyLink((dataset) => {
+      this.clearPinnedFit();
+      saveDataset(dataset);
+    });
+    this.xColumnIndexProperty.lazyLink(() => this.clearPinnedFit());
+    this.yColumnIndexProperty.lazyLink(() => {
+      this.clearPinnedFit();
+      const range = this.rangeProperty.value;
+      if (range?.y) {
+        this.setRange(range.min, range.max);
+      }
+    });
+
     // A range is in the units of the x column, so it does not survive a change of x column.
     this.xColumnIndexProperty.lazyLink(() => {
-      this.rangeProperty.value = null;
+      if (!this.reindexingXAxis) {
+        this.clearRange();
+      }
     });
+  }
+
+  public pinFit(): void {
+    const fit = this.fitProperty.value;
+    const range = this.rangeProperty.value;
+    const xColumn = this.xColumnProperty.value;
+    const yColumn = this.yColumnProperty.value;
+    if (fit.ok && range && xColumn && yColumn) {
+      this.pinnedFit.value = {
+        settings: this.fitSettings(),
+        fit,
+        range,
+        xColumn,
+        yColumn,
+        xValues: this.inclusionProperty.value.indices.map((index) => xColumn.values[index] as number),
+      };
+    }
+  }
+
+  public fitSettings(): FitSettings {
+    return {
+      uncertaintyColumn: this.uncertaintyColumnIndexProperty.value,
+      range: this.rangeProperty.value,
+      model: this.fitModelProperty.value,
+    };
+  }
+
+  public loadSession(session: Session): void {
+    this.reset();
+    this.datasetProperty.value = session.dataset;
+    this.xColumnIndexProperty.value = session.xColumn;
+    this.yColumnIndexProperty.value = session.yColumn;
+    const apply = (settings: FitSettings) => {
+      this.uncertaintyColumnIndexProperty.value = settings.uncertaintyColumn;
+      this.fitModelProperty.value = settings.model;
+      this.rangeProperty.value = settings.range;
+    };
+    if (session.pin) {
+      apply(session.pin);
+      this.pinFit();
+    }
+    apply(session);
+  }
+
+  public clearPinnedFit(): void {
+    this.pinnedFit.value = null;
   }
 
   /** Replaces the table with imported text. Returns false when the text holds no table. */
@@ -83,6 +194,7 @@ export class DataLabModel implements TModel {
       return false;
     }
     this.rangeProperty.value = null;
+    this.uncertaintyColumnIndexProperty.reset();
     this.datasetProperty.value = dataset;
     this.chooseDefaultColumns();
     return true;
@@ -93,7 +205,7 @@ export class DataLabModel implements TModel {
   }
 
   public setCell(rowIndex: number, columnIndex: number, text: string): void {
-    this.datasetProperty.value = setCell(this.datasetProperty.value, rowIndex, columnIndex, text);
+    this.updateDataset(setCell(this.datasetProperty.value, rowIndex, columnIndex, text));
   }
 
   public setColumnHeader(columnIndex: number, name: string, unit: string): void {
@@ -101,7 +213,11 @@ export class DataLabModel implements TModel {
   }
 
   public pasteBlock(rowIndex: number, columnIndex: number, block: readonly (readonly string[])[]): void {
-    this.datasetProperty.value = pasteBlock(this.datasetProperty.value, rowIndex, columnIndex, block);
+    this.updateDataset(pasteBlock(this.datasetProperty.value, rowIndex, columnIndex, block));
+  }
+
+  public setRowExcluded(rowIndex: number, excluded: boolean): void {
+    this.datasetProperty.value = setRowExcluded(this.datasetProperty.value, rowIndex, excluded);
   }
 
   public addRow(): void {
@@ -109,13 +225,71 @@ export class DataLabModel implements TModel {
   }
 
   public deleteRow(rowIndex: number): void {
-    this.datasetProperty.value = deleteRow(this.datasetProperty.value, rowIndex);
+    this.updateDataset(deleteRow(this.datasetProperty.value, rowIndex));
+  }
+
+  public addColumn(name: string): void {
+    this.datasetProperty.value = addColumn(this.datasetProperty.value, name);
+  }
+
+  public setCalculatedColumn(index: number, name: string, unit: string, formula: string): boolean {
+    const dataset = this.datasetProperty.value;
+    const next = setCalculatedColumn(dataset, index, name, unit, formula);
+    if (next === dataset) {
+      return false;
+    }
+    this.updateDataset(next);
+    return true;
+  }
+
+  public deleteColumn(columnIndex: number): void {
+    const dataset = this.datasetProperty.value;
+    if (dataset.columns.length <= 1) {
+      return;
+    }
+    const next = deleteColumn(dataset, columnIndex);
+    if (next === dataset) {
+      return;
+    }
+
+    const shiftedIndex = (index: number) => (index === columnIndex ? -1 : index > columnIndex ? index - 1 : index);
+    this.uncertaintyColumnIndexProperty.value = shiftedIndex(this.uncertaintyColumnIndexProperty.value);
+    this.updateDataset(
+      next,
+      shiftedIndex(this.xColumnIndexProperty.value),
+      shiftedIndex(this.yColumnIndexProperty.value),
+    );
+  }
+
+  /** Keep the selected axes when possible, otherwise fall back to a numeric column. */
+  private updateDataset(
+    dataset: Dataset,
+    xIndex = this.xColumnIndexProperty.value,
+    yIndex = this.yColumnIndexProperty.value,
+  ): void {
+    const numeric = dataset.columns
+      .map((column, index) => (isNumericColumn(column) ? index : -1))
+      .filter((i) => i >= 0);
+    const keepX = numeric.includes(xIndex);
+    const nextX = keepX ? xIndex : (numeric[0] ?? -1);
+    const nextY = numeric.includes(yIndex) ? yIndex : (numeric.find((i) => i !== nextX) ?? nextX);
+    if (!keepX) {
+      this.clearRange();
+    }
+    this.datasetProperty.value = dataset;
+    this.reindexingXAxis = keepX;
+    try {
+      this.xColumnIndexProperty.value = nextX;
+    } finally {
+      this.reindexingXAxis = false;
+    }
+    this.yColumnIndexProperty.value = nextY;
   }
 
   /** Sets the range from two bounds in either order. */
-  public setRange(a: number, b: number): void {
+  public setRange(a: number, b: number, y?: XRange): void {
     if (Number.isFinite(a) && Number.isFinite(b)) {
-      this.rangeProperty.value = orderedRange(a, b);
+      this.rangeProperty.value = y ? { ...orderedRange(a, b), y } : orderedRange(a, b);
     }
   }
 
@@ -153,8 +327,10 @@ export class DataLabModel implements TModel {
    * deliberately keeps the table: a student's data must not vanish at one press.
    */
   public reset(): void {
+    this.clearPinnedFit();
     this.rangeProperty.reset();
     this.fitModelProperty.reset();
+    this.uncertaintyColumnIndexProperty.reset();
   }
 
   public step(_dt: number): void {

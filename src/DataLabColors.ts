@@ -126,6 +126,11 @@ const DataLabColors = {
     projector: "#c2410c",
   }),
 
+  pinnedFitColorProperty: new ProfileColorProperty(DataLabNamespace, "pinnedFit", {
+    default: "#efd0fc",
+    projector: "#692881",
+  }),
+
   /** Translucent band over the selected range. */
   rangeBandColorProperty: new ProfileColorProperty(DataLabNamespace, "rangeBand", {
     default: "rgba(255,183,77,0.16)",
