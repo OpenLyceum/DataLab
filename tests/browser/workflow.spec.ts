@@ -458,3 +458,31 @@ test("calculated columns can be edited, fitted, and restored", async ({ page }) 
   await open(page);
   await expect.poll(async () => Number(await calculated.inputValue())).toBeCloseTo(0.3);
 });
+
+test("a pinned fit can be compared against another range and clears on table edits", async ({ page }) => {
+  await open(page);
+  const pin = page.getByRole("button", { name: "Pin fit", exact: true });
+  await expect(pin).toBeDisabled();
+  await setRange(page, "1.5", "3");
+  await pressButton(page, "Pin fit");
+  await setRange(page, "0", "1.5");
+  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+
+  const summary = await copiedResults(page);
+  expect(summary).toContain("Current fit\nQuadratic:");
+  expect(summary).toContain("Pinned fit\nLinear:");
+  expect(summary).toContain("Pinned range: 1.500 s to 3.000 s");
+  expect(parameter(summary, "m")).toBeCloseTo(0.9, 1);
+
+  await pressButton(page, "Compare fits");
+  const comparison = page.getByRole("dialog", { name: "Compare fits" });
+  await expect(comparison).toContainText("Current fit");
+  await expect(comparison).toContainText("Pinned fit");
+  await comparison.getByRole("button", { name: "Close" }).click();
+  await pressButton(page, "Remove pin");
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeDisabled();
+
+  await pressButton(page, "Pin fit");
+  await pressButton(page, "Add row");
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeDisabled();
+});

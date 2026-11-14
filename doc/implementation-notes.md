@@ -113,8 +113,12 @@ reference earlier columns by position (`C1`, `C2`, …), recalculate after table
 edits, and survive reload. Calculated cells are read-only and export as values.
 A source column stays protected while a formula references it.
 
-Remaining for 0.2:
-pinned fits (two ranges at once); log axes.
+A successful fit over a selected range can be pinned while a second range or
+model is fitted. The pin is a snapshot shown as a dashed curve and included in
+the comparison and copied results. Table edits, axis changes and Reset All clear
+the pin. The residual plot and CSV describe the current fit.
+
+Remaining for 0.2: log axes.
 
 0.3: nonlinear models (Levenberg–Marquardt); multiple runs; session files;
 statistics, slope and area on a range.

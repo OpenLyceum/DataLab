@@ -52,11 +52,12 @@ import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
 import { editCalculatedColumn } from "./editCalculatedColumn.js";
 import { fillPattern } from "./fillPattern.js";
-import { createFitTextProperty, fitSummary, modelNameProperties } from "./fitText.js";
+import { createFitTextProperty, fitSummary, modelNameProperties, pinnedFitText } from "./fitText.js";
 import { GraphView } from "./GraphView.js";
 import { PlotNode } from "./PlotNode.js";
 import { ResidualPlotNode } from "./ResidualPlotNode.js";
 import { ResultsPanel } from "./ResultsPanel.js";
+import { showFitComparison } from "./showFitComparison.js";
 
 export type DataLabScreenViewOptions = ScreenViewOptions;
 
@@ -289,6 +290,27 @@ export class DataLabScreenView extends ScreenView {
     });
     const rangeButtons = new HBox({ spacing: 6, children: [clearRangeButton, zoomButton, autoScaleButton] });
 
+    const pinButton = createButton(labels.pinFitStringProperty, () => model.pinFit());
+    const removePinButton = createButton(labels.removePinnedFitStringProperty, () => model.clearPinnedFit());
+    const compareButton = createButton(labels.compareFitsStringProperty, () => {
+      const pin = model.pinnedFitProperty.value;
+      if (pin) {
+        showFitComparison(fitTextProperty.value, pinnedFitText(pin));
+      }
+    });
+    const pinLegend = new Text(labels.pinnedFitLegendStringProperty, {
+      font: NOTE_FONT,
+      fill: DataLabColors.pinnedFitColorProperty,
+      maxWidth: PLOT_WIDTH,
+    });
+    Multilink.multilink([model.rangeProperty, model.fitProperty, model.pinnedFitProperty], (range, fit, pin) => {
+      pinButton.enabled = range !== null && fit.ok && pin === null;
+      removePinButton.enabled = pin !== null;
+      compareButton.enabled = pin !== null;
+      pinLegend.visible = pin !== null;
+    });
+    const pinControls = new HBox({ spacing: 6, children: [pinButton, compareButton, removePinButton, pinLegend] });
+
     const statusText = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH + 40 });
     const liveStatus = new Node({ tagName: "div", ariaRole: "status" });
     liveStatus.setPDOMAttribute("aria-live", "polite");
@@ -310,7 +332,7 @@ export class DataLabScreenView extends ScreenView {
     const belowPlots = new VBox({
       align: "left",
       spacing: 8,
-      children: [rangeRow, rangeButtons, statusText, messageText],
+      children: [rangeRow, rangeButtons, statusText, messageText, pinControls],
       left: PLOT_LEFT - 30,
       top: residualPlot.y + RESIDUAL_PLOT_HEIGHT + 42,
     });
@@ -398,8 +420,13 @@ export class DataLabScreenView extends ScreenView {
 
     const resultsPanel = new ResultsPanel(fitTextProperty, RIGHT_COLUMN_WIDTH - 24);
     const copyButton = createButton(labels.copySummaryStringProperty, () => {
+      const current = fitSummary(fitTextProperty.value);
+      const pin = model.pinnedFitProperty.value;
+      const result = pin
+        ? `${labels.currentFitStringProperty.value}\n${current}\n\n${labels.pinnedFitStringProperty.value}\n${fitSummary(pinnedFitText(pin))}`
+        : current;
       navigator.clipboard
-        ?.writeText(fitSummary(fitTextProperty.value))
+        ?.writeText(result)
         .then(() => {
           this.messageProperty.value = labels.copiedStringProperty.value;
         })
@@ -445,6 +472,9 @@ export class DataLabScreenView extends ScreenView {
           zoomButton,
           autoScaleButton,
           liveStatus,
+          pinButton,
+          compareButton,
+          removePinButton,
           modelRadioButtons,
           copyButton,
           exportGraphButton,

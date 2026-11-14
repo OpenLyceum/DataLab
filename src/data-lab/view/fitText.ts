@@ -23,7 +23,7 @@ import {
   MODEL_POWERS,
 } from "../../common/model/leastSquares.js";
 import { StringManager } from "../../i18n/StringManager.js";
-import type { DataLabModel } from "../model/DataLabModel.js";
+import type { DataLabModel, PinnedFit } from "../model/DataLabModel.js";
 import { fillPattern } from "./fillPattern.js";
 
 /** Below this many points left over (n − p), the uncertainties come with a caution. */
@@ -182,6 +182,21 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       };
     },
   );
+}
+
+export function pinnedFitText(pin: PinnedFit): FitText {
+  const labels = StringManager.getInstance().getLabels();
+  const { fit, xColumn, yColumn, range } = pin;
+  return {
+    status: fillPattern(labels.pinnedRangeStringProperty.value, {
+      min: withUnit(formatSignificant(range.min), xColumn.unit),
+      max: withUnit(formatSignificant(range.max), xColumn.unit),
+    }),
+    modelName: modelNameProperties()[fit.model].value,
+    equation: MODEL_EQUATIONS[fit.model],
+    lines: successLines(fit, xColumn.unit, yColumn.unit, labels),
+    caution: cautionText(fit, labels),
+  };
 }
 
 /** The fit as plain text, for pasting into a lab report. */

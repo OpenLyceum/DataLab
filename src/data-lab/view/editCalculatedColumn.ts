@@ -10,7 +10,7 @@ export function editCalculatedColumn(model: DataLabModel, columnIndex?: number):
   const previousFocus = document.activeElement;
   const dialog = document.createElement("dialog");
   // Match Scenery DOM nodes with allowInput enabled for this native modal.
-  dialog.dataset.sceneryAllowInput = "true";
+  dialog.dataset["sceneryAllowInput"] = "true";
   const form = document.createElement("form");
   form.style.cssText = "display:grid;gap:0.6em;max-width:26em;max-height:75vh;overflow:auto;font:1rem system-ui";
   const title = column ? labels.editFormulaStringProperty.value : labels.calculatedColumnStringProperty.value;

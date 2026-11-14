@@ -27,10 +27,24 @@ import {
   setRowExcluded,
 } from "../../common/model/Dataset.js";
 import { type Inclusion, includedRows, orderedRange, type XRange } from "../../common/model/includedRows.js";
-import { FitModel, type FitModelValue, type FitResult, fitModel } from "../../common/model/leastSquares.js";
+import {
+  FitModel,
+  type FitModelValue,
+  type FitResult,
+  type FitSuccess,
+  fitModel,
+} from "../../common/model/leastSquares.js";
 import { parseTable } from "../../common/model/parseTable.js";
 import { restoreDataset, saveDataset } from "./datasetStorage.js";
 import sampleCsv from "./samples/cart-ramp-then-level.csv?raw";
+
+export type PinnedFit = {
+  readonly fit: FitSuccess;
+  readonly range: XRange;
+  readonly xValues: readonly number[];
+  readonly xColumn: Column;
+  readonly yColumn: Column;
+};
 
 export class DataLabModel implements TModel {
   public readonly datasetProperty: Property<Dataset>;
@@ -51,6 +65,9 @@ export class DataLabModel implements TModel {
   public readonly yColumnProperty: TReadOnlyProperty<Column | null>;
   public readonly inclusionProperty: TReadOnlyProperty<Inclusion>;
   public readonly fitProperty: TReadOnlyProperty<FitResult>;
+
+  private readonly pinnedFit = new Property<PinnedFit | null>(null);
+  public readonly pinnedFitProperty: TReadOnlyProperty<PinnedFit | null> = this.pinnedFit;
 
   private reindexingXAxis = false;
 
@@ -100,7 +117,12 @@ export class DataLabModel implements TModel {
       },
     );
 
-    this.datasetProperty.lazyLink(saveDataset);
+    this.datasetProperty.lazyLink((dataset) => {
+      this.clearPinnedFit();
+      saveDataset(dataset);
+    });
+    this.xColumnIndexProperty.lazyLink(() => this.clearPinnedFit());
+    this.yColumnIndexProperty.lazyLink(() => this.clearPinnedFit());
 
     // A range is in the units of the x column, so it does not survive a change of x column.
     this.xColumnIndexProperty.lazyLink(() => {
@@ -108,6 +130,26 @@ export class DataLabModel implements TModel {
         this.clearRange();
       }
     });
+  }
+
+  public pinFit(): void {
+    const fit = this.fitProperty.value;
+    const range = this.rangeProperty.value;
+    const xColumn = this.xColumnProperty.value;
+    const yColumn = this.yColumnProperty.value;
+    if (fit.ok && range && xColumn && yColumn) {
+      this.pinnedFit.value = {
+        fit,
+        range,
+        xColumn,
+        yColumn,
+        xValues: this.inclusionProperty.value.indices.map((index) => xColumn.values[index] as number),
+      };
+    }
+  }
+
+  public clearPinnedFit(): void {
+    this.pinnedFit.value = null;
   }
 
   /** Replaces the table with imported text. Returns false when the text holds no table. */
@@ -250,6 +292,7 @@ export class DataLabModel implements TModel {
    * deliberately keeps the table: a student's data must not vanish at one press.
    */
   public reset(): void {
+    this.clearPinnedFit();
     this.rangeProperty.reset();
     this.fitModelProperty.reset();
     this.uncertaintyColumnIndexProperty.reset();

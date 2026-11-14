@@ -70,6 +70,12 @@ export class PlotNode extends Node {
       lineWidth: 2,
       pickable: false,
     });
+    const pinnedCurve = new Path(null, {
+      stroke: DataLabColors.pinnedFitColorProperty,
+      lineWidth: 2,
+      lineDash: [6, 4],
+      pickable: false,
+    });
     const band = new Rectangle(0, 0, 1, viewHeight, {
       fill: DataLabColors.rangeBandColorProperty,
       cursor: "grab",
@@ -77,6 +83,7 @@ export class PlotNode extends Node {
     frame.plotLayer.addChild(band);
     frame.plotLayer.addChild(points);
     frame.plotLayer.addChild(fitCurve);
+    frame.plotLayer.addChild(pinnedCurve);
 
     const xFromPointer = (globalPoint: { x: number; y: number }): number => {
       const viewX = clamp(frame.plotLayer.globalToLocalPoint(globalPoint as never).x, 0, viewWidth);
@@ -302,16 +309,8 @@ export class PlotNode extends Node {
       }
     };
 
-    const updateCurve = () => {
-      const fit = model.fitProperty.value;
-      const xColumn = model.xColumnProperty.value;
-      const indices = model.inclusionProperty.value.indices;
-      if (!(fit.ok && xColumn) || indices.length === 0) {
-        fitCurve.shape = null;
-        return;
-      }
+    const curveShape = (fit: FitSuccess, xValues: readonly number[]): Shape => {
       // Reciprocal curves have separate branches on either side of zero.
-      const xValues = indices.map((index) => xColumn.values[index] as number);
       const branches = usesReciprocalX(fit.model)
         ? [xValues.filter((x) => x < 0), xValues.filter((x) => x > 0)]
         : [xValues];
@@ -329,7 +328,25 @@ export class PlotNode extends Node {
         }
         appendCurveBranch(shape, fit, min, max);
       }
-      fitCurve.shape = shape;
+      return shape;
+    };
+
+    const updateCurve = () => {
+      const fit = model.fitProperty.value;
+      const x = model.xColumnProperty.value;
+      const indices = model.inclusionProperty.value.indices;
+      fitCurve.shape =
+        fit.ok && x
+          ? curveShape(
+              fit,
+              indices.map((index) => x.values[index] as number),
+            )
+          : null;
+    };
+
+    const updatePinnedCurve = () => {
+      const pin = model.pinnedFitProperty.value;
+      pinnedCurve.shape = pin ? curveShape(pin.fit, pin.xValues) : null;
     };
 
     const updateAxes = () => {
@@ -359,8 +376,10 @@ export class PlotNode extends Node {
         updateAxes();
         updateRange();
         updateCurve();
+        updatePinnedCurve();
       },
     );
+    model.pinnedFitProperty.lazyLink(updatePinnedCurve);
     model.rangeProperty.lazyLink(updateRange);
     model.fitProperty.lazyLink(updateCurve);
   }
