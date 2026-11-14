@@ -587,3 +587,52 @@ test("exponential fits use original measurements and export their predictions", 
   expect(Number(row?.[3])).toBeCloseTo(4 * Math.exp(-1), 10);
   expect(Number(row?.[4])).toBeCloseTo(0, 10);
 });
+
+test("named runs keep separate data and analysis and round-trip together", async ({ page }) => {
+  await open(page);
+  const active = page.getByLabel("Active run", { exact: true });
+  await setRange(page, "1.5", "3");
+  await pressButton(page, "Pin fit");
+  await page.getByRole("checkbox", { name: "Log x", exact: true }).dispatchEvent("click");
+  await pressButton(page, "New run");
+  await expect(active).toHaveValue("1");
+  await expect(page.locator("tbody tr")).toHaveCount(1);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Time (s),Signal (V)\n0,5\n1,6\n2,8");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await setRange(page, "0", "2");
+  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+  await pressButton(page, "Manage run");
+  const manager = page.getByRole("dialog", { name: "Manage run" });
+  await manager.getByLabel("Run name").fill("Trial B");
+  await manager.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(active.locator("option:checked")).toHaveText("Trial B");
+
+  await active.selectOption("0");
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+  await expect(page.getByLabel("Range minimum")).toHaveValue("1.5");
+  await expect(page.getByRole("checkbox", { name: "Log x", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeEnabled();
+  await active.selectOption("1");
+  await expect(page.locator("tbody tr")).toHaveCount(3);
+  await expect(page.getByRole("radio", { name: "Quadratic" })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeDisabled();
+
+  const [file] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Save session")]);
+  const saved = readFileSync(await file.path());
+  await pressButton(page, "Manage run");
+  await manager.getByRole("button", { name: "Delete run", exact: true }).click();
+  await expect(manager.getByRole("heading")).toHaveText("Delete “Trial B”?");
+  await manager.getByRole("button", { name: "Delete run", exact: true }).click();
+  await expect(active.locator("option")).toHaveCount(1);
+
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), pressButton(page, "Open session")]);
+  await chooser.setFiles({ name: file.suggestedFilename(), mimeType: "application/json", buffer: saved });
+  await expect(active.locator("option:checked")).toHaveText("Trial B");
+  await expect(page.getByLabel("Signal (V), row 3", { exact: true })).toHaveValue("8");
+  await expect(page.getByRole("radio", { name: "Quadratic" })).toBeChecked();
+  await active.selectOption("0");
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeEnabled();
+});

@@ -35,7 +35,7 @@ export const CONTROL_FONT_SIZE = 12;
 // ── Data table (left column) ──────────────────────────────────────────────────
 
 export const TABLE_WIDTH = 290;
-export const TABLE_HEIGHT = 500;
+export const TABLE_HEIGHT = 472;
 
 // ── Graphs (middle column) ────────────────────────────────────────────────────
 

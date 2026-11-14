@@ -22,10 +22,10 @@ import {
   LIGHT_SURFACE_TEXT_FILL,
 } from "../../common/DataLabButtonOptions.js";
 import { DataLabPanel } from "../../common/DataLabPanel.js";
-import { columnLabel, isNumericColumn, parseNumber } from "../../common/model/Dataset.js";
+import { columnLabel, createColumn, isNumericColumn, parseNumber } from "../../common/model/Dataset.js";
 import { exportCsv } from "../../common/model/exportCsv.js";
 import { FIT_MODELS } from "../../common/model/formatFit.js";
-import type { FitModelValue } from "../../common/model/leastSquares.js";
+import { FitModel, type FitModelValue } from "../../common/model/leastSquares.js";
 import { downloadBlob, downloadText, installDropTarget, openTextFile } from "../../common/view/fileIO.js";
 import DataLabColors from "../../DataLabColors.js";
 import {
@@ -48,10 +48,12 @@ import {
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabPreferencesModel } from "../../preferences/DataLabPreferencesModel.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
-import { decodeSession, encodeSession, SESSION_FILE_NAME } from "../model/sessionFile.js";
+import { RunWorkspace } from "../model/RunWorkspace.js";
+import { decodeSession, encodeSession, SESSION_FILE_NAME, type Session } from "../model/sessionFile.js";
 import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
 import { editCalculatedColumn } from "./editCalculatedColumn.js";
+import { editRun } from "./editRun.js";
 import { fillPattern } from "./fillPattern.js";
 import { createFitTextProperty, fitSummary, modelNameProperties, pinnedFitText } from "./fitText.js";
 import { GraphView } from "./GraphView.js";
@@ -106,6 +108,64 @@ export class DataLabScreenView extends ScreenView {
         listener,
       });
 
+    const runName = (position: number) => fillPattern(labels.defaultRunStringProperty.value, { position });
+    const captureRun = (): Session => ({
+      ...model.fitSettings(),
+      dataset: model.datasetProperty.value,
+      xColumn: model.xColumnIndexProperty.value,
+      yColumn: model.yColumnIndexProperty.value,
+      logX: this.graphView.logXProperty.value,
+      logY: this.graphView.logYProperty.value,
+      showResiduals: preferences.showResidualsProperty.value,
+      pin: model.pinnedFitProperty.value?.settings ?? null,
+    });
+    const restoreRun = (session: Session) => {
+      model.loadSession(session);
+      this.graphView.setLogAxes(session.logX, session.logY);
+      this.graphView.autoScale();
+      preferences.showResidualsProperty.value = session.showResiduals;
+      this.messageProperty.value = "";
+    };
+    const runWorkspace = new RunWorkspace(runName(1), captureRun, restoreRun);
+    const runSelect = document.createElement("select");
+    runSelect.style.cssText = `width: 120px; box-sizing: border-box; font: ${HTML_FONT}; padding: 2px;`;
+    labels.activeRunStringProperty.link((name) => runSelect.setAttribute("aria-label", name));
+    const refreshRuns = () => {
+      runSelect.replaceChildren(...runWorkspace.names.map((name, i) => new Option(name, String(i))));
+      runSelect.value = String(runWorkspace.selectedIndex);
+    };
+    refreshRuns();
+    runSelect.addEventListener("change", () => runWorkspace.select(Number(runSelect.value)));
+    const newRunButton = createButton(labels.newRunStringProperty, () => {
+      const columnName = (position: number) => fillPattern(labels.defaultColumnNameStringProperty.value, { position });
+      const names = runWorkspace.names;
+      let runNumber = names.length + 1;
+      while (names.includes(runName(runNumber))) {
+        runNumber++;
+      }
+      runWorkspace.add(runName(runNumber), {
+        dataset: {
+          columns: [createColumn(columnName(1), "", [""]), createColumn(columnName(2), "", [""])],
+          rowCount: 1,
+        },
+        xColumn: -1,
+        yColumn: -1,
+        uncertaintyColumn: -1,
+        range: null,
+        model: FitModel.LINEAR,
+        logX: false,
+        logY: false,
+        showResiduals: preferences.showResidualsProperty.value,
+        pin: null,
+      });
+      refreshRuns();
+    });
+    const manageRunButton = createButton(labels.manageRunStringProperty, () => editRun(runWorkspace, refreshRuns));
+    const runButtons = new HBox({
+      spacing: 6,
+      children: [new DOM(runSelect, { allowInput: true }), newRunButton, manageRunButton],
+    });
+
     // ── Import ────────────────────────────────────────────────────────────────
     const importText = (text: string) => {
       const imported = model.importText(text, (position) =>
@@ -115,12 +175,10 @@ export class DataLabScreenView extends ScreenView {
       this.messageProperty.value = imported ? "" : labels.importFailedStringProperty.value;
     };
     const openSession = (text: string) => {
-      const session = decodeSession(text);
+      const session = decodeSession(text, runName(1));
       if (session) {
-        model.loadSession(session);
-        this.graphView.setLogAxes(session.logX, session.logY);
-        this.graphView.autoScale();
-        preferences.showResidualsProperty.value = session.showResiduals;
+        runWorkspace.load(session);
+        refreshRuns();
       }
       this.messageProperty.value = session ? "" : labels.sessionInvalidStringProperty.value;
     };
@@ -135,7 +193,11 @@ export class DataLabScreenView extends ScreenView {
     // Ctrl+V anywhere outside a text field replaces the table with the clipboard.
     document.addEventListener("paste", (event) => {
       const target = event.target;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof Element && target.closest("dialog"))
+      ) {
         return;
       }
       const text = event.clipboardData?.getData("text/plain") ?? "";
@@ -189,16 +251,7 @@ export class DataLabScreenView extends ScreenView {
       openTextFile(openSession, ".json,application/json"),
     );
     const saveSessionButton = createButton(labels.saveSessionStringProperty, () => {
-      const text = encodeSession({
-        ...model.fitSettings(),
-        dataset: model.datasetProperty.value,
-        xColumn: model.xColumnIndexProperty.value,
-        yColumn: model.yColumnIndexProperty.value,
-        logX: this.graphView.logXProperty.value,
-        logY: this.graphView.logYProperty.value,
-        showResiduals: preferences.showResidualsProperty.value,
-        pin: model.pinnedFitProperty.value?.settings ?? null,
-      });
+      const text = encodeSession(runWorkspace.save());
       downloadText(text, SESSION_FILE_NAME, "application/json");
     });
     const fileButtons = new HBox({ spacing: 6, children: [calculatedButton, loadSessionButton, saveSessionButton] });
@@ -206,7 +259,7 @@ export class DataLabScreenView extends ScreenView {
     const leftColumn = new VBox({
       align: "left",
       spacing: 8,
-      children: [importButtons, table, tableButtons, fileButtons],
+      children: [runButtons, importButtons, table, tableButtons, fileButtons],
       left: bounds.minX + SCREEN_VIEW_MARGIN,
       top: bounds.minY + SCREEN_VIEW_MARGIN,
     });
@@ -514,6 +567,8 @@ export class DataLabScreenView extends ScreenView {
     this.addChild(
       new Node({
         pdomOrder: [
+          newRunButton,
+          manageRunButton,
           openButton,
           pasteButton,
           sampleButton,

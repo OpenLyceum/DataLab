@@ -138,7 +138,14 @@ Nonlinear fitting starts with an exponential growth or decay model. It uses
 Levenberg–Marquardt on the original y measurements and supports the optional y
 uncertainty column. The reference x₀ is fixed to the smallest x in the fit.
 
-Remaining for 0.3: multiple runs.
+Multiple named runs keep independent tables, axes, ranges, model settings, and
+pinned fits. New runs start with a blank table and can be renamed or deleted.
+The graph, range analysis, and individual CSV/PNG exports use the active run.
+Version 2 session files include all runs and the active run. Version 1 files
+open as a single run. Browser reload recovery restores the active table.
+Save a session file to reopen the whole workspace.
+
+All 0.3 roadmap items are implemented.
 
 Later: sensor capture over Web Bluetooth; rectangle selection; PDF report;
 a shared fleet package for graph, table and fit code.

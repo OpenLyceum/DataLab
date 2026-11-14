@@ -44,27 +44,71 @@ function validFit(value: unknown, dataset: Dataset): value is FitSettings {
   return validIndex(uncertaintyColumn, dataset) && Object.values(FitModel).includes(model) && validRange(range);
 }
 
-export function encodeSession(session: Session): string {
-  return JSON.stringify({ ...session, format: "openlyceum-data-lab", version: 1 });
+export type NamedRun = {
+  readonly name: string;
+  readonly session: Session;
+};
+
+export type RunSession = {
+  readonly runs: readonly NamedRun[];
+  readonly activeIndex: number;
+};
+
+function decodeRun(value: unknown): Session | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const file = value as Session;
+  const dataset = decodeDataset(file.dataset);
+  if (
+    !(dataset && validFit(file, dataset) && validIndex(file.xColumn, dataset) && validIndex(file.yColumn, dataset)) ||
+    typeof file.logX !== "boolean" ||
+    typeof file.logY !== "boolean" ||
+    typeof file.showResiduals !== "boolean" ||
+    (file.pin !== null && (!validFit(file.pin, dataset) || file.pin.range === null))
+  ) {
+    return null;
+  }
+  return { ...file, dataset };
 }
 
-export function decodeSession(text: string): Session | null {
+export const MAX_RUN_NAME_LENGTH = 80;
+
+export function encodeSession(session: RunSession): string {
+  return JSON.stringify({ ...session, format: "openlyceum-data-lab", version: 2 });
+}
+
+export function decodeSession(text: string, legacyName: string): RunSession | null {
   try {
-    const file = JSON.parse(text) as Session & { format?: string; version?: number };
-    if (file?.format !== "openlyceum-data-lab" || file.version !== 1) {
+    const file = JSON.parse(text) as { format?: string; version?: number; runs?: NamedRun[]; activeIndex?: number };
+    if (file?.format !== "openlyceum-data-lab") {
       return null;
     }
-    const dataset = decodeDataset(file.dataset);
+    if (file.version === 1) {
+      const session = decodeRun(file);
+      return session ? { runs: [{ name: legacyName, session }], activeIndex: 0 } : null;
+    }
+    const { runs, activeIndex } = file;
     if (
-      !(dataset && validFit(file, dataset) && validIndex(file.xColumn, dataset) && validIndex(file.yColumn, dataset)) ||
-      typeof file.logX !== "boolean" ||
-      typeof file.logY !== "boolean" ||
-      typeof file.showResiduals !== "boolean" ||
-      (file.pin !== null && (!validFit(file.pin, dataset) || file.pin.range === null))
+      file.version !== 2 ||
+      !Array.isArray(runs) ||
+      typeof activeIndex !== "number" ||
+      !Number.isInteger(activeIndex) ||
+      activeIndex < 0 ||
+      activeIndex >= runs.length
     ) {
       return null;
     }
-    return { ...file, dataset };
+    const decoded: NamedRun[] = [];
+    for (const run of runs) {
+      const session = decodeRun(run?.session);
+      const name = run?.name;
+      if (!session || typeof name !== "string" || !name.trim() || name.length > MAX_RUN_NAME_LENGTH) {
+        return null;
+      }
+      decoded.push({ name, session });
+    }
+    return { runs: decoded, activeIndex };
   } catch {
     return null;
   }
