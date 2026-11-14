@@ -1,8 +1,8 @@
 /**
  * leastSquares.ts
  *
- * Ordinary least squares for polynomial and reciprocal models. Reciprocal models
- * use x⁻¹ or x⁻² as the predictor, with a fitted intercept. Pure TypeScript.
+ * Least-squares fitting and evaluation for Data Lab. Polynomial models and
+ * the fixed-predictor reciprocal and logarithmic models use a shared QR solver.
  *
  * Method: x is shifted to its mean and scaled to [−1, 1], the design matrix is
  * factored by Householder QR, and the coefficients and their covariance are then
@@ -15,27 +15,44 @@
  * points are left over after the parameters are determined (n > p).
  */
 
+import { CURVE_PARAMETER_COUNTS, type CurveModel, evaluateCurve, solveCurve } from "./curveModels.js";
 import { exponentialValue, solveExponential } from "./exponentialFit.js";
 import { backSubstitute, householder, isRankDeficient, standardErrorsOf } from "./qr.js";
 
 export const FitModel = {
   PROPORTIONAL: "proportional",
   LINEAR: "linear",
+  WEIGHTED_LINEAR: "weightedLinear",
   QUADRATIC: "quadratic",
   CUBIC: "cubic",
+  QUARTIC: "quartic",
+  POWER: "power",
+  POWER_NO_OFFSET: "powerNoOffset",
   INVERSE: "inverse",
+  SHIFTED_INVERSE: "shiftedInverse",
   INVERSE_SQUARE: "inverseSquare",
+  SHIFTED_INVERSE_SQUARE: "shiftedInverseSquare",
   EXPONENTIAL: "exponential",
+  EXPONENTIAL_BACKGROUND: "exponentialBackground",
+  INVERSE_EXPONENTIAL: "inverseExponential",
+  LOGARITHMIC: "logarithmic",
+  SINE: "sine",
+  DAMPED_SINE: "dampedSine",
+  SINE_SERIES: "sineSeries",
+  GAUSSIAN: "gaussian",
 } as const;
 
 export type FitModelValue = (typeof FitModel)[keyof typeof FitModel];
 
 /** Powers of x in each model, in the order its parameters are reported. */
-export const MODEL_POWERS: Record<Exclude<FitModelValue, "exponential">, readonly number[]> = {
+export const MODEL_POWERS: Record<Exclude<FitModelValue, "exponential" | CurveModel>, readonly number[]> = {
   proportional: [1],
   linear: [1, 0],
+  weightedLinear: [1, 0],
+  logarithmic: [1, 0],
   quadratic: [2, 1, 0],
   cubic: [3, 2, 1, 0],
+  quartic: [4, 3, 2, 1, 0],
   inverse: [-1, 0],
   inverseSquare: [-2, 0],
 };
@@ -47,6 +64,7 @@ export const FitFailureReason = {
   TOO_FEW_DISTINCT_X: "tooFewDistinctX",
   /** Proportional fit where every x is zero. */
   ALL_X_ZERO: "allXZero",
+  MISSING_UNCERTAINTY: "missingUncertainty",
   INVALID_UNCERTAINTY: "invalidUncertainty",
   NONLINEAR_FAILURE: "nonlinearFailure",
   UNSUPPORTED_X: "unsupportedX",
@@ -94,17 +112,46 @@ function binomial(n: number, k: number): number {
   return result;
 }
 
-/** Reciprocal models are linear in x raised to their leading power. */
-export function usesReciprocalX(model: FitModelValue): boolean {
-  return model === FitModel.INVERSE || model === FitModel.INVERSE_SQUARE;
+function isCurveModel(model: FitModelValue): model is CurveModel {
+  return Object.hasOwn(CURVE_PARAMETER_COUNTS, model);
+}
+
+function reciprocalPower(model: FitModelValue): number | null {
+  return model === FitModel.INVERSE ? -1 : model === FitModel.INVERSE_SQUARE ? -2 : null;
+}
+
+/** Position of the vertical asymptote, when the plot must draw separate branches. */
+export function fitPole(model: FitModelValue, parameters: readonly number[]): number | null {
+  if (model === FitModel.SHIFTED_INVERSE || model === FitModel.SHIFTED_INVERSE_SQUARE) {
+    return parameters[1] as number;
+  }
+  return reciprocalPower(model) === null ? null : 0;
+}
+
+/** Highest fitted angular frequency, used to sample oscillatory curves densely enough. */
+export function highestAngularFrequency(fit: FitSuccess): number {
+  switch (fit.model) {
+    case FitModel.SINE:
+      return fit.parameters[1] as number;
+    case FitModel.DAMPED_SINE:
+      return fit.parameters[2] as number;
+    case FitModel.SINE_SERIES:
+      return 3 * (fit.parameters[0] as number);
+    default:
+      return 0;
+  }
+}
+
+export function requiresPositiveX(model: FitModelValue): boolean {
+  return model === FitModel.LOGARITHMIC || model === FitModel.POWER || model === FitModel.POWER_NO_OFFSET;
 }
 
 export function supportsFitX(model: FitModelValue, x: number): boolean {
-  return (
-    model === FitModel.EXPONENTIAL ||
-    !usesReciprocalX(model) ||
-    Number.isFinite(x ** (MODEL_POWERS[model][0] as number))
-  );
+  if (requiresPositiveX(model)) {
+    return x > 0;
+  }
+  const power = reciprocalPower(model);
+  return power === null || Number.isFinite(x ** power);
 }
 
 /** A standard uncertainty must be finite and strictly positive. */
@@ -121,10 +168,14 @@ export function evaluateFit(model: FitModelValue, parameters: readonly number[],
   if (!supportsFitX(model, x)) {
     return Number.NaN;
   }
+  if (isCurveModel(model)) {
+    return evaluateCurve(model, parameters, x);
+  }
+  const predictor = model === FitModel.LOGARITHMIC ? Math.log(x) : x;
   const powers = MODEL_POWERS[model];
   let y = 0;
   for (let j = 0; j < powers.length; j++) {
-    y += (parameters[j] as number) * x ** (powers[j] as number);
+    y += (parameters[j] as number) * predictor ** (powers[j] as number);
   }
   return y;
 }
@@ -174,10 +225,14 @@ function coefficientOfDetermination(
   return totalSumSquares > 0 ? 1 - sumSquaredResiduals / totalSumSquares : null;
 }
 
-function fitExponential(xs: readonly number[], ys: readonly number[], uncertainties?: readonly number[]): FitResult {
+function fitNonlinear(
+  model: "exponential" | CurveModel,
+  xs: readonly number[],
+  ys: readonly number[],
+  uncertainties?: readonly number[],
+): FitResult {
   const count = Math.min(xs.length, ys.length);
-  const model = FitModel.EXPONENTIAL;
-  const required = 2;
+  const required = model === FitModel.EXPONENTIAL ? 2 : CURVE_PARAMETER_COUNTS[model];
   const fail = (reason: FitFailureReasonValue): FitFailure => ({ ok: false, model, reason, required, count });
   const obstacle = unsolvableReason(xs, count, required, true);
   if (obstacle) {
@@ -186,11 +241,23 @@ function fitExponential(xs: readonly number[], ys: readonly number[], uncertaint
   if (uncertainties && (uncertainties.length !== count || uncertainties.some((sigma) => !validUncertainty(sigma)))) {
     return fail(FitFailureReason.INVALID_UNCERTAINTY);
   }
-  const solution = solveExponential(xs.slice(0, count), ys.slice(0, count), uncertainties);
+  const xValues = xs.slice(0, count);
+  const yValues = ys.slice(0, count);
+  if (xValues.some((x) => !supportsFitX(model, x))) {
+    return fail(FitFailureReason.UNSUPPORTED_X);
+  }
+  const solution =
+    model === FitModel.EXPONENTIAL
+      ? solveExponential(xValues, yValues, uncertainties)
+      : solveCurve(model, xValues, yValues, uncertainties);
   if (!solution) {
     return fail(FitFailureReason.NONLINEAR_FAILURE);
   }
-  const { parameters, residuals, standardErrors } = solution;
+  const { parameters, standardErrors } = solution;
+  const { residuals } = solution;
+  if (residuals.some((value) => !Number.isFinite(value))) {
+    return fail(FitFailureReason.NONLINEAR_FAILURE);
+  }
   const degreesOfFreedom = count - required;
   const sumSquaredResiduals = residuals.reduce((sum, residual) => sum + residual ** 2, 0);
   return {
@@ -203,7 +270,15 @@ function fitExponential(xs: readonly number[], ys: readonly number[], uncertaint
     residuals,
     sumSquaredResiduals,
     rmse: degreesOfFreedom > 0 ? Math.sqrt(sumSquaredResiduals / degreesOfFreedom) : null,
-    rSquared: null,
+    rSquared:
+      !uncertainties && degreesOfFreedom > 0 && model !== FitModel.EXPONENTIAL && model !== FitModel.POWER_NO_OFFSET
+        ? coefficientOfDetermination(
+            yValues,
+            count,
+            yValues.reduce((sum, y) => sum + y / count, 0),
+            sumSquaredResiduals,
+          )
+        : null,
     reducedChiSquared: reducedChiSquared(residuals, uncertainties, degreesOfFreedom),
   };
 }
@@ -228,18 +303,37 @@ export function fitModel(
   ys: readonly number[],
   uncertainties?: readonly number[],
 ): FitResult {
-  if (model === FitModel.EXPONENTIAL) {
-    return fitExponential(xs, ys, uncertainties);
+  if (model === FitModel.EXPONENTIAL || isCurveModel(model)) {
+    return fitNonlinear(model, xs, ys, uncertainties);
   }
+  return fitLinearInParameters(model, xs, ys, uncertainties);
+}
+
+function linearPredictor(model: keyof typeof MODEL_POWERS, xs: readonly number[]) {
+  const reciprocal = reciprocalPower(model);
+  if (reciprocal !== null) {
+    return { powers: MODEL_POWERS.linear, predictors: xs.map((x) => x ** reciprocal) };
+  }
+  const predictors = model === FitModel.LOGARITHMIC ? xs.map(Math.log) : xs;
+  return { powers: MODEL_POWERS[model], predictors };
+}
+
+function fitLinearInParameters(
+  model: keyof typeof MODEL_POWERS,
+  xs: readonly number[],
+  ys: readonly number[],
+  uncertainties?: readonly number[],
+): FitResult {
   const n = Math.min(xs.length, ys.length);
-  const reciprocal = usesReciprocalX(model);
-  const powers = reciprocal ? MODEL_POWERS.linear : MODEL_POWERS[model];
-  const predictors = reciprocal ? xs.slice(0, n).map((x) => x ** (MODEL_POWERS[model][0] as number)) : xs;
+  const { powers, predictors } = linearPredictor(model, xs.slice(0, n));
   const p = powers.length;
   const hasIntercept = powers.includes(0);
   const fail = (reason: FitFailureReasonValue): FitFailure => ({ ok: false, model, reason, required: p, count: n });
 
-  if (reciprocal && predictors.some((x) => !Number.isFinite(x))) {
+  if (model === FitModel.WEIGHTED_LINEAR && !uncertainties) {
+    return fail(FitFailureReason.MISSING_UNCERTAINTY);
+  }
+  if (predictors.some((x) => !Number.isFinite(x))) {
     return fail(FitFailureReason.UNSUPPORTED_X);
   }
   if (uncertainties && (uncertainties.length !== n || uncertainties.some((sigma) => !validUncertainty(sigma)))) {

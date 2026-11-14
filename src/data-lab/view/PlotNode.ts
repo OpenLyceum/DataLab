@@ -20,7 +20,7 @@ import { Shape } from "scenerystack/kite";
 import { DragListener, KeyboardListener, Line, Node, Path, Rectangle } from "scenerystack/scenery";
 import { columnLabel } from "../../common/model/Dataset.js";
 import type { XRange } from "../../common/model/includedRows.js";
-import { evaluateFit, type FitSuccess, usesReciprocalX } from "../../common/model/leastSquares.js";
+import { evaluateFit, type FitSuccess, fitPole, highestAngularFrequency } from "../../common/model/leastSquares.js";
 import { axisCoordinate, axisValue } from "../../common/view/axisRange.js";
 import { ChartFrameNode } from "../../common/view/ChartFrameNode.js";
 import { installGraphGestures } from "../../common/view/GraphGestures.js";
@@ -32,6 +32,8 @@ import type { GraphView } from "./GraphView.js";
 
 /** Samples along the fitted curve; plenty for a parabola across a few hundred pixels. */
 const CURVE_SAMPLES = 120;
+const MAX_CURVE_SAMPLES = 4096;
+const SAMPLES_PER_CYCLE = 24;
 
 /** Height of the strip under the plot that takes x-axis gestures: the gap down to the residual graph. */
 const X_AXIS_STRIP_HEIGHT = 20;
@@ -317,9 +319,11 @@ export class PlotNode extends Node {
     };
 
     const appendCurveBranch = (shape: Shape, fit: FitSuccess, min: number, max: number) => {
+      const cycles = (highestAngularFrequency(fit) / (2 * Math.PI)) * (fromX(max) - fromX(min));
+      const samples = Math.min(MAX_CURVE_SAMPLES, Math.max(CURVE_SAMPLES, Math.ceil(SAMPLES_PER_CYCLE * cycles)));
       let started = false;
-      for (let k = 0; k <= CURVE_SAMPLES; k++) {
-        const x = k === CURVE_SAMPLES ? max : min + ((max - min) * k) / CURVE_SAMPLES;
+      for (let k = 0; k <= samples; k++) {
+        const x = k === samples ? max : min + ((max - min) * k) / samples;
         const y = axisCoordinate(evaluateFit(fit.model, fit.parameters, fromX(x)), graphView.logYProperty.value);
         if (!Number.isFinite(y)) {
           started = false;
@@ -337,10 +341,8 @@ export class PlotNode extends Node {
     };
 
     const curveShape = (fit: FitSuccess, xValues: readonly number[]): Shape => {
-      // Reciprocal curves have separate branches on either side of zero.
-      const branches = usesReciprocalX(fit.model)
-        ? [xValues.filter((x) => x < 0), xValues.filter((x) => x > 0)]
-        : [xValues];
+      const pole = fitPole(fit.model, fit.parameters);
+      const branches = pole === null ? [xValues] : [xValues.filter((x) => x < pole), xValues.filter((x) => x > pole)];
       const shape = new Shape();
       const visible = graphView.xAxisRangeProperty.value;
       for (const branch of branches) {

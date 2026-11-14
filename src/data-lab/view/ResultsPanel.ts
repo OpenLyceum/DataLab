@@ -10,6 +10,7 @@ import type { TReadOnlyProperty } from "scenerystack/axon";
 import { Text, VBox } from "scenerystack/scenery";
 import { PhetFont } from "scenerystack/scenery-phet";
 import { DataLabPanel } from "../../common/DataLabPanel.js";
+import { MODEL_SYMBOLS } from "../../common/model/formatFit.js";
 import DataLabColors from "../../DataLabColors.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { FitText } from "./fitText.js";
@@ -19,8 +20,8 @@ const LINE_FONT = new PhetFont(13);
 const NOTE_FONT = new PhetFont(11);
 const LINE_SPACING = 5;
 
-/** Most lines a fit produces: four parameters, RMSE, R², points used. */
-const MAX_LINES = 7;
+/** Parameters plus RMSE, a goodness-of-fit statistic, and points used. */
+const MAX_LINES = Math.max(...Object.values(MODEL_SYMBOLS).map((symbols) => symbols.length)) + 3;
 
 export class ResultsPanel extends DataLabPanel {
   public constructor(fitTextProperty: TReadOnlyProperty<FitText>, contentWidth: number) {

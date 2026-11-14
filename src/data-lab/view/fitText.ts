@@ -8,11 +8,11 @@
 
 import { DerivedProperty, type TReadOnlyProperty } from "scenerystack/axon";
 import {
+  fitEquation,
+  fitParameterUnit,
   formatSignificant,
   formatWithUncertainty,
-  MODEL_EQUATIONS,
   MODEL_SYMBOLS,
-  parameterUnit,
   withUnit,
 } from "../../common/model/formatFit.js";
 import {
@@ -21,7 +21,7 @@ import {
   FitModel,
   type FitModelValue,
   type FitSuccess,
-  MODEL_POWERS,
+  requiresPositiveX,
 } from "../../common/model/leastSquares.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel, PinnedFit } from "../model/DataLabModel.js";
@@ -56,6 +56,19 @@ export function modelNameProperties(): Record<FitModelValue, TReadOnlyProperty<s
     inverse: labels.inverseStringProperty,
     inverseSquare: labels.inverseSquareStringProperty,
     exponential: labels.exponentialStringProperty,
+    weightedLinear: labels.weightedLinearStringProperty,
+    quartic: labels.quarticStringProperty,
+    power: labels.powerStringProperty,
+    powerNoOffset: labels.powerNoOffsetStringProperty,
+    shiftedInverse: labels.shiftedInverseStringProperty,
+    shiftedInverseSquare: labels.shiftedInverseSquareStringProperty,
+    exponentialBackground: labels.exponentialBackgroundStringProperty,
+    inverseExponential: labels.inverseExponentialStringProperty,
+    logarithmic: labels.logarithmicStringProperty,
+    sine: labels.sineStringProperty,
+    dampedSine: labels.dampedSineStringProperty,
+    sineSeries: labels.sineSeriesStringProperty,
+    gaussian: labels.gaussianStringProperty,
   };
 }
 
@@ -66,6 +79,12 @@ function yBounds(range: { min: number; max: number }, unit: string, labels: Labe
     min: withUnit(formatSignificant(range.min), unit),
     max: withUnit(formatSignificant(range.max), unit),
   });
+}
+
+function unsupportedPattern(model: FitModelValue, labels: Labels): string {
+  return requiresPositiveX(model)
+    ? labels.statusNonpositiveStringProperty.value
+    : labels.statusUnsupportedStringProperty.value;
 }
 
 function statusText(model: DataLabModel, labels: Labels): string {
@@ -92,7 +111,9 @@ function statusText(model: DataLabModel, labels: Labels): string {
     notes.push(fillPattern(labels.statusSkippedStringProperty.value, { count: inclusion.skippedCount }));
   }
   if (inclusion.unsupportedCount > 0) {
-    notes.push(fillPattern(labels.statusUnsupportedStringProperty.value, { count: inclusion.unsupportedCount }));
+    notes.push(
+      fillPattern(unsupportedPattern(model.fitModelProperty.value, labels), { count: inclusion.unsupportedCount }),
+    );
   }
   if (inclusion.invalidUncertaintyCount > 0) {
     notes.push(
@@ -110,10 +131,7 @@ function successLines(fit: FitSuccess, xUnit: string, yUnit: string, labels: Lab
       fit.model === FitModel.EXPONENTIAL && j === 2
         ? String(value)
         : formatWithUncertainty(value, fit.standardErrors?.[j] ?? null);
-    const unit =
-      fit.model === FitModel.EXPONENTIAL
-        ? ([yUnit, parameterUnit(xUnit, "", 1), xUnit][j] ?? "")
-        : parameterUnit(xUnit, yUnit, MODEL_POWERS[fit.model][j] as number);
+    const unit = fitParameterUnit(fit.model, j, xUnit, yUnit);
     return `${symbols[j]} = ${withUnit(formatted, unit)}`;
   });
   if (fit.rmse !== null) {
@@ -149,11 +167,14 @@ function failureLine(fit: FitFailure, labels: Labels): string {
   if (fit.reason === FitFailureReason.NONLINEAR_FAILURE) {
     return labels.nonlinearFailureStringProperty.value;
   }
+  if (fit.reason === FitFailureReason.MISSING_UNCERTAINTY) {
+    return labels.missingUncertaintyStringProperty.value;
+  }
   if (fit.reason === FitFailureReason.INVALID_UNCERTAINTY) {
     return fillPattern(labels.statusInvalidUncertaintyStringProperty.value, { count: fit.count });
   }
   if (fit.reason === FitFailureReason.UNSUPPORTED_X) {
-    return fillPattern(labels.statusUnsupportedStringProperty.value, { count: fit.count });
+    return fillPattern(unsupportedPattern(fit.model, labels), { count: fit.count });
   }
   const pattern =
     fit.reason === FitFailureReason.TOO_FEW_POINTS
@@ -182,6 +203,8 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       labels.statusInvalidUncertaintyStringProperty,
       labels.reducedChiSquaredStringProperty,
       labels.statusUnsupportedStringProperty,
+      labels.statusNonpositiveStringProperty,
+      labels.missingUncertaintyStringProperty,
       labels.pointsUsedStringProperty,
       labels.rmseStringProperty,
       labels.rSquaredStringProperty,
@@ -199,7 +222,7 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       return {
         status: statusText(model, labels),
         modelName: names[fit.model].value,
-        equation: MODEL_EQUATIONS[fit.model],
+        equation: fitEquation(fit.model, model.xColumnProperty.value?.name, model.yColumnProperty.value?.name),
         lines: fit.ok ? successLines(fit, xUnit, yUnit, labels) : [failureLine(fit, labels)],
         caution: fit.ok ? cautionText(fit, labels) : "",
       };
@@ -217,7 +240,7 @@ export function pinnedFitText(pin: PinnedFit): FitText {
         max: withUnit(formatSignificant(range.max), xColumn.unit),
       }) + (range.y ? ` · ${yBounds(range.y, yColumn.unit, labels)}` : ""),
     modelName: modelNameProperties()[fit.model].value,
-    equation: MODEL_EQUATIONS[fit.model],
+    equation: fitEquation(fit.model, xColumn.name, yColumn.name),
     lines: successLines(fit, xColumn.unit, yColumn.unit, labels),
     caution: cautionText(fit, labels),
   };

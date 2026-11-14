@@ -86,9 +86,13 @@ and residual standard deviation of four NIST Statistical Reference Datasets
 `tests/fixtures/nist/README.md`.
 
 
-## Cubic and reciprocal models
+## Higher polynomials and transformed predictors
 
-The cubic model extends the polynomial design matrix to degree three.
+The cubic and quartic models extend the polynomial design matrix to degrees
+three and four. The natural logarithm fits `y = A·ln(x) + B` using the same
+solver with `ln(x)` as the predictor. In `A·ln(k·x) + y₀`, the two constants
+contribute only through `B = A·ln(k) + y₀`, so the fit estimates that combined
+background.
 The inverse and inverse-square models use the same linear solver with
 predictors \(1/x\) and \(1/x^2\), respectively, and a free intercept.
 The residuals and RMSE remain in the original y units. Measurements whose
@@ -98,7 +102,8 @@ and residual blank for them.
 
 ## Weighted fits
 
-The optional y-uncertainty column contains positive standard uncertainties in
+Weighted linear requires a y-uncertainty column. The same column can be
+selected to weight any of the other models. It contains positive standard uncertainties in
 the same units as y. Each design row and its y value are scaled by
 `min(σ) / σᵢ` before QR, which gives the same solution as weights `1 / σᵢ²`.
 Rows with missing, zero or negative uncertainties do not enter a weighted fit.
@@ -118,3 +123,32 @@ steps. The log of the magnitude of y provides only a starting estimate, so
 zero and negative observations still enter the objective. The final Jacobian
 provides local parameter uncertainties. If an uncertainty column is selected,
 the same absolute-σ convention and reduced χ² as for weighted linear fits apply.
+
+## Additional nonlinear fits
+
+| Model | Equation |
+|---|---|
+| Power | y = A·x^n + B |
+| Power (no offset) | y = A·x^n |
+| Inverse (shifted x) | y = A/(x − x₀) + B |
+| Inverse square (shifted x) | y = A/(x − x₀)² + B |
+| Exponential with background | y = A·exp(k·x) + y₀ |
+| Inverse exponential | y = A·(1 − exp(−k·x)) + y₀ |
+| Sine | y = A·sin(ω·x + φ) + C |
+| Damped sine | y = A·exp(−k·x)·sin(ω·x + φ) + C |
+| Sine series | y = C + Σₕ Aₕ·sin(h·ω·x + φₕ), for h = 1, 2, 3 |
+| Gaussian | y = A·exp(−½·((x − μ)/σ)²) + y₀ |
+
+Power and logarithmic fits use rows with strictly positive x. The power
+exponent is estimated from the measurements, with the residuals still
+computed in the original y units. The shifted reciprocal fits estimate
+the position of the pole and draw each side as a separate curve.
+
+The added nonlinear fits use variable projection. At each trial value of
+the nonlinear parameters, weighted QR gives the least-squares amplitudes
+and background. Data Lab ranks multiple trial values and refines several
+with Nelder–Mead. The final Jacobian gives local standard errors. The
+frequency search uses the median spacing between distinct x values to
+estimate a Nyquist limit, applied to the highest harmonic in the model.
+It also caps the frequency grid at 128 fundamental cycles across the
+selected range. Equations in the results use the selected axis names.
