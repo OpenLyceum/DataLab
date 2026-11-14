@@ -15,8 +15,9 @@ import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
 import { DOM, HBox, Node, Text, VBox } from "scenerystack/scenery";
 import { PhetFont, ResetAllButton } from "scenerystack/scenery-phet";
 import { ScreenView, type ScreenViewOptions } from "scenerystack/sim";
-import { Checkbox, TextPushButton, VerticalAquaRadioButtonGroup } from "scenerystack/sun";
+import { Checkbox, ComboBox, TextPushButton } from "scenerystack/sun";
 import {
+  DATA_LAB_COMBO_BOX_OPTIONS,
   FLAT_PANEL_PUSH_BUTTON_OPTIONS,
   FLAT_RESET_ALL_BUTTON_OPTIONS,
   LIGHT_SURFACE_TEXT_FILL,
@@ -544,14 +545,28 @@ export class DataLabScreenView extends ScreenView {
 
     // ── Fit model ─────────────────────────────────────────────────────────────
     const modelNames = modelNameProperties();
-    const modelRadioButtons = new VerticalAquaRadioButtonGroup<FitModelValue>(
+    // The popup sits above the results panel while the button stays in the controls.
+    const fitModelPopup = new Node();
+    const fitModelComboBox = new ComboBox<FitModelValue>(
       model.fitModelProperty,
       FIT_MODELS.map((value) => ({
         value,
-        createNode: () => new Text(modelNames[value], { ...textOptions, maxWidth: RIGHT_COLUMN_WIDTH - 60 }),
-        options: { accessibleName: modelNames[value] },
+        createNode: () =>
+          new Text(modelNames[value], {
+            font: CONTROL_FONT,
+            fill: LIGHT_SURFACE_TEXT_FILL,
+            maxWidth: SELECT_WIDTH - 40,
+          }),
+        accessibleName: modelNames[value],
       })),
-      { spacing: 6, accessibleName: labels.fitModelStringProperty },
+      fitModelPopup,
+      {
+        ...DATA_LAB_COMBO_BOX_OPTIONS,
+        preferredWidth: SELECT_WIDTH,
+        xMargin: 8,
+        yMargin: 4,
+        accessibleName: labels.fitModelStringProperty,
+      },
     );
 
     const heading = (string: typeof labels.xAxisStringProperty) =>
@@ -572,7 +587,7 @@ export class DataLabScreenView extends ScreenView {
           heading(labels.uncertaintyColumnStringProperty),
           uncertaintySelect,
           heading(labels.fitModelStringProperty),
-          modelRadioButtons,
+          fitModelComboBox,
         ],
       }),
       { minWidth: RIGHT_COLUMN_WIDTH, align: "left" },
@@ -615,6 +630,7 @@ export class DataLabScreenView extends ScreenView {
     this.addChild(resetAllButton);
 
     // ── Keyboard / reading order ──────────────────────────────────────────────
+    this.addChild(fitModelPopup);
     this.addChild(liveStatus);
     this.addChild(
       new Node({
@@ -644,7 +660,7 @@ export class DataLabScreenView extends ScreenView {
           pinButton,
           compareButton,
           removePinButton,
-          modelRadioButtons,
+          fitModelComboBox,
           copyButton,
           exportGraphButton,
           resetAllButton,

@@ -61,6 +61,19 @@ async function pressButton(page: Page, name: string): Promise<void> {
   await page.getByRole("button", { name, exact: true }).dispatchEvent("click");
 }
 
+function fitModelButton(page: Page) {
+  return page.getByRole("button", { name: /^Fit model / });
+}
+
+async function selectFitModel(page: Page, name: string): Promise<void> {
+  await fitModelButton(page).press("Enter");
+  const option = page.getByRole("option", { name, exact: true });
+  await expect(option).toBeVisible();
+  await option.focus();
+  await option.press("Enter");
+  await expect(fitModelButton(page)).toHaveAccessibleName(`Fit model ${name}`);
+}
+
 async function copiedResults(page: Page): Promise<string> {
   await pressButton(page, "Copy results");
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain("Points used");
@@ -97,7 +110,7 @@ test("a linear fit to the level-track range gives the cart's speed", async ({ pa
 
 test("a quadratic fit to the ramp range gives half the acceleration", async ({ page }) => {
   await open(page);
-  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+  await selectFitModel(page, "Quadratic");
   await setRange(page, "0", "1.5");
   expect(await includedRowCount(page)).toBe(31);
 
@@ -408,7 +421,7 @@ test("inverse fits skip zero and leave its prediction blank in CSV", async ({ pa
     data.setData("text/plain", "Distance (m),Signal (V)\n-2,0\n-1,-2\n0,99\n1,6\n2,4\n4,3");
     document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
   });
-  await page.getByRole("radio", { name: "Inverse", exact: true }).dispatchEvent("click");
+  await selectFitModel(page, "Inverse");
   await expect(page.getByRole("status")).toContainText("1 skipped (undefined reciprocal x)");
   expect(await includedRowCount(page)).toBe(5);
   const summary = await copiedResults(page);
@@ -466,7 +479,7 @@ test("a pinned fit can be compared against another range and clears on table edi
   await setRange(page, "1.5", "3");
   await pressButton(page, "Pin fit");
   await setRange(page, "0", "1.5");
-  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+  await selectFitModel(page, "Quadratic");
 
   const summary = await copiedResults(page);
   expect(summary).toContain("Current fit\nQuadratic:");
@@ -541,7 +554,7 @@ test("session files restore measurements, axis settings, and both fits", async (
   await setRange(page, "1.5", "3");
   await pressButton(page, "Pin fit");
   await setRange(page, "0", "1.5");
-  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+  await selectFitModel(page, "Quadratic");
   const log = page.getByRole("checkbox", { name: "Log x", exact: true });
   await log.dispatchEvent("click");
   const [file] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Save session")]);
@@ -575,7 +588,7 @@ test("exponential fits use original measurements and export their predictions", 
     data.setData("text/plain", ["Time (s),Signal (V)", ...rows].join("\n"));
     document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
   });
-  await page.getByRole("radio", { name: "Exponential", exact: true }).dispatchEvent("click");
+  await selectFitModel(page, "Exponential");
   const summary = await copiedResults(page);
   expect(summary).toContain("Exponential: y = A·exp(k·(x − x₀))");
   expect(summary).toMatch(/^k = .* 1\/s$/m);
@@ -603,7 +616,7 @@ test("named runs keep separate data and analysis and round-trip together", async
     document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
   });
   await setRange(page, "0", "2");
-  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+  await selectFitModel(page, "Quadratic");
   await pressButton(page, "Manage run");
   const manager = page.getByRole("dialog", { name: "Manage run" });
   await manager.getByLabel("Run name").fill("Trial B");
@@ -617,7 +630,7 @@ test("named runs keep separate data and analysis and round-trip together", async
   await expect(page.getByRole("button", { name: "Compare fits" })).toBeEnabled();
   await active.selectOption("1");
   await expect(page.locator("tbody tr")).toHaveCount(3);
-  await expect(page.getByRole("radio", { name: "Quadratic" })).toBeChecked();
+  await expect(fitModelButton(page)).toHaveAccessibleName("Fit model Quadratic");
   await expect(page.getByRole("button", { name: "Compare fits" })).toBeDisabled();
 
   const [file] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Save session")]);
@@ -632,7 +645,7 @@ test("named runs keep separate data and analysis and round-trip together", async
   await chooser.setFiles({ name: file.suggestedFilename(), mimeType: "application/json", buffer: saved });
   await expect(active.locator("option:checked")).toHaveText("Trial B");
   await expect(page.getByLabel("Signal (V), row 3", { exact: true })).toHaveValue("8");
-  await expect(page.getByRole("radio", { name: "Quadratic" })).toBeChecked();
+  await expect(fitModelButton(page)).toHaveAccessibleName("Fit model Quadratic");
   await active.selectOption("0");
   await expect(page.getByRole("button", { name: "Compare fits" })).toBeEnabled();
 });
