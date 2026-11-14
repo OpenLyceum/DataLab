@@ -147,5 +147,18 @@ Save a session file to reopen the whole workspace.
 
 All 0.3 roadmap items are implemented.
 
-Later: sensor capture over Web Bluetooth; rectangle selection; PDF report;
-a shared fleet package for graph, table and fit code.
+0.4 work includes rectangle selection and PASCO Bluetooth capture. Rectangle
+selection stores inclusive x and y bounds in data units. It works with log
+display, fits, pinning, range analysis, and session files. The x and y fields
+provide a keyboard alternative to dragging. Changing the y column clears the
+y bounds, leaving the x range in place.
+
+PASCO capture currently supports the Smart Cart position channel. Data Lab
+polls the encoder at up to 10 Hz, accumulates signed position increments in
+metres relative to the first sample, and timestamps each response in the
+browser. The recording opens in a new run. The channel and conversion are
+documented in [PASCO’s Python library](https://github.com/PASCOscientific/pasco_python).
+Capture requires a browser and platform with Web Bluetooth support. The
+protocol and capture workflow were exercised with a simulated GATT device.
+
+Later: PDF report and a shared fleet package for graph, table and fit code.

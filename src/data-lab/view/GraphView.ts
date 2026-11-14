@@ -32,6 +32,7 @@ function displayedRange(min: number, max: number, padding: number, log: boolean)
 }
 
 export class GraphView {
+  public readonly rectangleSelectionProperty = new Property(false);
   public readonly logXProperty = new Property(false);
   public readonly logYProperty = new Property(false);
   public readonly hiddenCountProperty: TReadOnlyProperty<number>;

@@ -50,6 +50,7 @@ import type { DataLabPreferencesModel } from "../../preferences/DataLabPreferenc
 import type { DataLabModel } from "../model/DataLabModel.js";
 import { RunWorkspace } from "../model/RunWorkspace.js";
 import { decodeSession, encodeSession, SESSION_FILE_NAME, type Session } from "../model/sessionFile.js";
+import { capturePasco } from "./capturePasco.js";
 import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
 import { editCalculatedColumn } from "./editCalculatedColumn.js";
@@ -136,20 +137,19 @@ export class DataLabScreenView extends ScreenView {
     };
     refreshRuns();
     runSelect.addEventListener("change", () => runWorkspace.select(Number(runSelect.value)));
-    const newRunButton = createButton(labels.newRunStringProperty, () => {
-      const columnName = (position: number) => fillPattern(labels.defaultColumnNameStringProperty.value, { position });
+    const nextRunName = () => {
       const names = runWorkspace.names;
       let runNumber = names.length + 1;
       while (names.includes(runName(runNumber))) {
         runNumber++;
       }
-      runWorkspace.add(runName(runNumber), {
-        dataset: {
-          columns: [createColumn(columnName(1), "", [""]), createColumn(columnName(2), "", [""])],
-          rowCount: 1,
-        },
-        xColumn: -1,
-        yColumn: -1,
+      return runName(runNumber);
+    };
+    const addRun = (dataset: Session["dataset"], name: string, hasData: boolean) => {
+      runWorkspace.add(name, {
+        dataset,
+        xColumn: hasData ? 0 : -1,
+        yColumn: hasData ? 1 : -1,
         uncertaintyColumn: -1,
         range: null,
         model: FitModel.LINEAR,
@@ -159,6 +159,20 @@ export class DataLabScreenView extends ScreenView {
         pin: null,
       });
       refreshRuns();
+    };
+    const newRunButton = createButton(labels.newRunStringProperty, () => {
+      const columnName = (position: number) => fillPattern(labels.defaultColumnNameStringProperty.value, { position });
+      addRun(
+        {
+          columns: [createColumn(columnName(1), "", [""]), createColumn(columnName(2), "", [""])],
+          rowCount: 1,
+        },
+        nextRunName(),
+        false,
+      );
+    });
+    const captureButton = createButton(labels.capturePascoStringProperty, () => {
+      capturePasco((dataset, name) => addRun(dataset, name, true));
     });
     const manageRunButton = createButton(labels.manageRunStringProperty, () => editRun(runWorkspace, refreshRuns));
     const runButtons = new HBox({
@@ -225,7 +239,7 @@ export class DataLabScreenView extends ScreenView {
       this.graphView.autoScale();
       this.messageProperty.value = "";
     });
-    const importButtons = new HBox({ spacing: 6, children: [openButton, pasteButton, sampleButton] });
+    const importButtons = new HBox({ spacing: 6, children: [openButton, pasteButton, sampleButton, captureButton] });
 
     // ── Table ─────────────────────────────────────────────────────────────────
     const table = new DataTableNode(model, { width: TABLE_WIDTH, height: TABLE_HEIGHT });
@@ -305,12 +319,15 @@ export class DataLabScreenView extends ScreenView {
     });
 
     // ── Range fields ──────────────────────────────────────────────────────────
-    const createField = (accessibleName: typeof a11y.controls.rangeMinimumStringProperty) => {
+    const createField = (
+      accessibleName: typeof a11y.controls.rangeMinimumStringProperty,
+      width = RANGE_FIELD_WIDTH,
+    ) => {
       const input = document.createElement("input");
       input.type = "text";
       input.inputMode = "decimal";
       input.autocomplete = "off";
-      input.style.cssText = `width: ${RANGE_FIELD_WIDTH}px; box-sizing: border-box; font: ${HTML_FONT}; padding: 3px 5px; text-align: right;`;
+      input.style.cssText = `width: ${width}px; box-sizing: border-box; font: ${HTML_FONT}; padding: 3px 5px; text-align: right;`;
       accessibleName.link((name) => input.setAttribute("aria-label", name));
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
@@ -321,24 +338,45 @@ export class DataLabScreenView extends ScreenView {
     };
     const minField = createField(a11y.controls.rangeMinimumStringProperty);
     const maxField = createField(a11y.controls.rangeMaximumStringProperty);
+    const minYField = createField(labels.rectangleMinimumStringProperty, 56);
+    const maxYField = createField(labels.rectangleMaximumStringProperty, 56);
     const fieldText = (value: number) => String(Number(value.toPrecision(6)));
+    let editingBounds = false;
     const commitRange = () => {
       const min = parseNumber(minField.value, true);
       const max = parseNumber(maxField.value, true);
-      if (!(Number.isFinite(min) || Number.isFinite(max))) {
-        model.clearRange();
-        return;
-      }
-      // A single bound typed on its own runs to the end of the data.
       const values = model.distinctXValues();
-      model.setRange(
-        Number.isFinite(min) ? min : (values[0] ?? max),
-        Number.isFinite(max) ? max : (values[values.length - 1] ?? min),
-      );
+      const yMin = parseNumber(minYField.value, true);
+      const yMax = parseNumber(maxYField.value, true);
+      const y =
+        Number.isFinite(yMin) && Number.isFinite(yMax)
+          ? { min: Math.min(yMin, yMax), max: Math.max(yMin, yMax) }
+          : undefined;
+      editingBounds = true;
+      try {
+        if (Number.isFinite(min) || Number.isFinite(max) || y) {
+          model.setRange(
+            Number.isFinite(min) ? min : (values[0] ?? max),
+            Number.isFinite(max) ? max : (values[values.length - 1] ?? min),
+            y,
+          );
+        } else {
+          model.clearRange();
+        }
+      } finally {
+        editingBounds = false;
+      }
     };
-    minField.addEventListener("change", commitRange);
-    maxField.addEventListener("change", commitRange);
+    for (const field of [minField, maxField, minYField, maxYField]) {
+      field.addEventListener("change", commitRange);
+    }
     model.rangeProperty.link((range) => {
+      if (!editingBounds && minYField !== document.activeElement) {
+        minYField.value = range?.y ? fieldText(range.y.min) : "";
+      }
+      if (!editingBounds && maxYField !== document.activeElement) {
+        maxYField.value = range?.y ? fieldText(range.y.max) : "";
+      }
       if (minField !== document.activeElement) {
         minField.value = range ? fieldText(range.min) : "";
       }
@@ -351,7 +389,11 @@ export class DataLabScreenView extends ScreenView {
       unitText.string = column?.unit ?? "";
     });
 
-    const clearRangeButton = createButton(labels.clearRangeStringProperty, () => model.clearRange());
+    const clearRangeButton = createButton(labels.clearRangeStringProperty, () => {
+      minYField.value = "";
+      maxYField.value = "";
+      model.clearRange();
+    });
     const zoomButton = createButton(labels.zoomToRangeStringProperty, () => {
       const range = model.rangeProperty.value;
       if (range) {
@@ -375,6 +417,9 @@ export class DataLabScreenView extends ScreenView {
         new Text(labels.rangeToStringProperty, { ...textOptions, maxWidth: 30 }),
         new DOM(maxField, { allowInput: true }),
         unitText,
+        new Text(labels.rectangleYStringProperty, { ...textOptions, maxWidth: 25 }),
+        new DOM(minYField, { allowInput: true }),
+        new DOM(maxYField, { allowInput: true }),
       ],
     });
     const analyzeButton = createButton(labels.rangeAnalysisStringProperty, () => showRangeAnalysis(model));
@@ -410,8 +455,15 @@ export class DataLabScreenView extends ScreenView {
     const logYCheckbox = new Checkbox(graphView.logYProperty, new Text(labels.logYStringProperty, textOptions), {
       accessibleName: labels.logYStringProperty,
     });
+    const rectangleCheckbox = new Checkbox(
+      graphView.rectangleSelectionProperty,
+      new Text(labels.rectangleSelectionStringProperty, textOptions),
+      {
+        accessibleName: labels.rectangleSelectionStringProperty,
+      },
+    );
     const logNotice = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH });
-    const scales = new HBox({ spacing: 8, children: [logXCheckbox, logYCheckbox, logNotice] });
+    const scales = new HBox({ spacing: 8, children: [logXCheckbox, logYCheckbox, rectangleCheckbox, logNotice] });
 
     const statusText = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH + 40 });
     const liveStatus = new Node({ tagName: "div", ariaRole: "status" });
@@ -572,6 +624,7 @@ export class DataLabScreenView extends ScreenView {
           openButton,
           pasteButton,
           sampleButton,
+          captureButton,
           addRowButton,
           addColumnButton,
           calculatedButton,
@@ -585,6 +638,7 @@ export class DataLabScreenView extends ScreenView {
           autoScaleButton,
           analyzeButton,
           liveStatus,
+          rectangleCheckbox,
           logXCheckbox,
           logYCheckbox,
           pinButton,
@@ -601,6 +655,7 @@ export class DataLabScreenView extends ScreenView {
 
   /** Resets view-side state. The table is kept; see DataLabModel.reset(). */
   public reset(): void {
+    this.graphView.rectangleSelectionProperty.reset();
     this.graphView.setLogAxes(false, false);
     this.graphView.autoScale();
     this.messageProperty.reset();

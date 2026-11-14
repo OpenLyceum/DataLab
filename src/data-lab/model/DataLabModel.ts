@@ -125,7 +125,13 @@ export class DataLabModel implements TModel {
       saveDataset(dataset);
     });
     this.xColumnIndexProperty.lazyLink(() => this.clearPinnedFit());
-    this.yColumnIndexProperty.lazyLink(() => this.clearPinnedFit());
+    this.yColumnIndexProperty.lazyLink(() => {
+      this.clearPinnedFit();
+      const range = this.rangeProperty.value;
+      if (range?.y) {
+        this.setRange(range.min, range.max);
+      }
+    });
 
     // A range is in the units of the x column, so it does not survive a change of x column.
     this.xColumnIndexProperty.lazyLink(() => {
@@ -281,9 +287,9 @@ export class DataLabModel implements TModel {
   }
 
   /** Sets the range from two bounds in either order. */
-  public setRange(a: number, b: number): void {
+  public setRange(a: number, b: number, y?: XRange): void {
     if (Number.isFinite(a) && Number.isFinite(b)) {
-      this.rangeProperty.value = orderedRange(a, b);
+      this.rangeProperty.value = y ? { ...orderedRange(a, b), y } : orderedRange(a, b);
     }
   }
 

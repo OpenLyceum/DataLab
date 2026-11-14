@@ -16,6 +16,7 @@ import { type FitModelValue, supportsFitX, validUncertainty } from "./leastSquar
 export type XRange = {
   readonly min: number;
   readonly max: number;
+  readonly y?: XRange;
 };
 
 export type Inclusion = {
@@ -34,6 +35,13 @@ export type Inclusion = {
 /** Orders two bounds, so a selection dragged right-to-left still reads min ≤ max. */
 export function orderedRange(a: number, b: number): XRange {
   return a <= b ? { min: a, max: b } : { min: b, max: a };
+}
+
+function withinSelection(x: number, y: number, range: XRange | null): boolean {
+  return (
+    range === null ||
+    (x >= range.min && x <= range.max && (range.y === undefined || (y >= range.y.min && y <= range.y.max)))
+  );
 }
 
 export function includedRows(
@@ -56,7 +64,7 @@ export function includedRows(
     const y = ys[i] as number;
     if (!(Number.isFinite(x) && Number.isFinite(y))) {
       skippedCount++;
-    } else if (!excluded.has(i) && (range === null || (x >= range.min && x <= range.max))) {
+    } else if (!excluded.has(i) && withinSelection(x, y, range)) {
       if (model && !supportsFitX(model, x)) {
         unsupportedCount++;
         continue;

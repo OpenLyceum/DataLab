@@ -88,9 +88,15 @@ export class PlotNode extends Node {
 
     const toX = (value: number) => axisCoordinate(value, graphView.logXProperty.value);
     const fromX = (value: number) => axisValue(value, graphView.logXProperty.value);
+    const toY = (value: number) => axisCoordinate(value, graphView.logYProperty.value);
     const xFromPointer = (globalPoint: { x: number; y: number }): number => {
       const viewX = clamp(frame.plotLayer.globalToLocalPoint(globalPoint as never).x, 0, viewWidth);
       return fromX(chartTransform.viewToModelX(viewX));
+    };
+
+    const yFromPointer = (globalPoint: { x: number; y: number }): number => {
+      const local = frame.plotLayer.globalToLocalPoint(globalPoint as never);
+      return axisValue(chartTransform.viewToModelY(clamp(local.y, 0, viewHeight)), graphView.logYProperty.value);
     };
 
     // A second finger turns a one-finger range gesture into a pinch: the gesture is
@@ -142,7 +148,7 @@ export class PlotNode extends Node {
           const range = model.rangeProperty.value;
           anchor = range ? (isStart ? range.max : range.min) : 0;
         },
-        drag: (event) => model.setRange(anchor, xFromPointer(event.pointer.point)),
+        drag: (event) => model.setRange(anchor, xFromPointer(event.pointer.point), model.rangeProperty.value?.y),
         end: endRangeGesture,
       });
       rangeListeners.push(handleListener);
@@ -151,7 +157,7 @@ export class PlotNode extends Node {
       const moveTo = (x: number) => {
         const range = model.rangeProperty.value;
         if (range) {
-          model.setRange(isStart ? range.max : range.min, x);
+          model.setRange(isStart ? range.max : range.min, x, range.y);
         }
       };
       handle.addInputListener(
@@ -218,6 +224,7 @@ export class PlotNode extends Node {
     // ── Sweep a new range across empty plot area ──────────────────────────────
     // With Shift held, the same drag pans both axes instead.
     let sweepStart = 0;
+    let sweepY = 0;
     let isPanning = false;
     let panStart = { x: 0, y: 0 };
     let panXRange = graphView.xAxisRangeProperty.value;
@@ -232,6 +239,7 @@ export class PlotNode extends Node {
         } else {
           beginRangeGesture();
           sweepStart = xFromPointer(event.pointer.point);
+          sweepY = yFromPointer(event.pointer.point);
         }
       },
       drag: (event) => {
@@ -240,7 +248,14 @@ export class PlotNode extends Node {
           graphView.panX(panXRange, (-(point.x - panStart.x) * panXRange.getLength()) / viewWidth);
           graphView.panY(panYRange, ((point.y - panStart.y) * panYRange.getLength()) / viewHeight);
         } else {
-          model.setRange(sweepStart, xFromPointer(event.pointer.point));
+          const y = yFromPointer(event.pointer.point);
+          model.setRange(
+            sweepStart,
+            xFromPointer(event.pointer.point),
+            graphView.rectangleSelectionProperty.value
+              ? { min: Math.min(sweepY, y), max: Math.max(sweepY, y) }
+              : undefined,
+          );
         }
       },
       end: endRangeGesture,
@@ -262,7 +277,7 @@ export class PlotNode extends Node {
       },
       drag: (event) => {
         const min = xFromPointer(event.pointer.point) - grabOffset;
-        model.setRange(min, min + grabWidth);
+        model.setRange(min, min + grabWidth, model.rangeProperty.value?.y);
       },
       end: endRangeGesture,
     });
@@ -288,12 +303,17 @@ export class PlotNode extends Node {
       band.visible = Number.isFinite(x1) && x1 >= 0 && x0 <= viewWidth;
       if (band.visible) {
         const start = clamp(x0, 0, viewWidth);
-        band.setRect(start, 0, Math.max(clamp(x1, 0, viewWidth) - start, 1), viewHeight);
+        const top = range?.y ? toY(range.y.max) : NaN;
+        const bottom = range?.y ? toY(range.y.min) : NaN;
+        const y0 = Number.isFinite(top) ? clamp(chartTransform.modelToViewY(top), 0, viewHeight) : 0;
+        const y1 = Number.isFinite(bottom) ? clamp(chartTransform.modelToViewY(bottom), 0, viewHeight) : viewHeight;
+        band.visible = !range?.y || Number.isFinite(top);
+        band.setRect(start, y0, Math.max(clamp(x1, 0, viewWidth) - start, 1), Math.max(y1 - y0, 1));
         rangeStartHandle.x = clamp(x0, 0, viewWidth);
         rangeEndHandle.x = x1;
       }
-      rangeStartHandle.visible = range !== null && inView(x0);
-      rangeEndHandle.visible = range !== null && inView(x1);
+      rangeStartHandle.visible = inView(x0);
+      rangeEndHandle.visible = inView(x1);
     };
 
     const appendCurveBranch = (shape: Shape, fit: FitSuccess, min: number, max: number) => {
@@ -396,6 +416,9 @@ export class PlotNode extends Node {
       },
     );
     model.pinnedFitProperty.lazyLink(updatePinnedCurve);
+    graphView.rectangleSelectionProperty.link((rectangle) => {
+      band.pickable = !rectangle;
+    });
     model.rangeProperty.lazyLink(updateRange);
     model.fitProperty.lazyLink(updateCurve);
   }

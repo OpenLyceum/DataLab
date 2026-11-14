@@ -636,3 +636,103 @@ test("named runs keep separate data and analysis and round-trip together", async
   await active.selectOption("0");
   await expect(page.getByRole("button", { name: "Compare fits" })).toBeEnabled();
 });
+
+test("rectangle drag constrains both axes and feeds the fit and CSV", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "x,y\n0,0\n1,1\n2,2\n2,8\n3,3\n4,4");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await page.getByRole("checkbox", { name: "Rectangle", exact: true }).dispatchEvent("click");
+  const px = (x: number) => PLOT.left + ((x + 0.16) / 4.32) * PLOT.width;
+  const py = (y: number) => PLOT.top + ((8.64 - y) / 9.28) * PLOT.height;
+  await page.mouse.move(px(3.5), py(3.5));
+  await page.mouse.down();
+  await page.mouse.move(px(0.5), py(0.5), { steps: 8 });
+  await page.mouse.up();
+  await expect(page.getByRole("status")).toContainText("Using 3 of 6 rows");
+  await expect(page.getByRole("status")).toContainText("y from");
+  const [file] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
+  expect(readFileSync(await file.path(), "utf8")).toContain("2,8,0,");
+  const maxY = page.getByLabel("Selection y maximum");
+  await maxY.fill("9");
+  await maxY.press("Enter");
+  await expect(page.getByRole("status")).toContainText("Using 4 of 6 rows");
+  const [saved] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Save session")]);
+  await pressButton(page, "Clear range");
+  await expect(maxY).toHaveValue("");
+  const minY = page.getByLabel("Selection y minimum");
+  await minY.fill("0.5");
+  await minY.press("Enter");
+  await maxY.fill("4.5");
+  await maxY.press("Enter");
+  await expect(page.getByRole("status")).toContainText("Using 4 of 6 rows");
+
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), pressButton(page, "Open session")]);
+  await chooser.setFiles({
+    name: saved.suggestedFilename(),
+    mimeType: "application/json",
+    buffer: readFileSync(await saved.path()),
+  });
+  await expect(maxY).toHaveValue("9");
+});
+
+test("PASCO Smart Cart capture turns signed samples into a new run", async ({ page }) => {
+  await page.addInitScript(() => {
+    const reader = Object.assign(new EventTarget(), {
+      value: new DataView(new ArrayBuffer(5)),
+      startNotifications: () => Promise.resolve(),
+    });
+    Object.defineProperty(navigator, "bluetooth", {
+      value: {
+        requestDevice: (options: { filters: { namePrefix: string }[]; optionalServices: string[] }) => {
+          const serviceId = "4a5c0003-0000-0000-0000-5c1e741f1c00";
+          if (options.filters[0]?.namePrefix !== "Smart Cart" || !options.optionalServices.includes(serviceId)) {
+            throw new Error("Wrong filter");
+          }
+          const writer = {
+            properties: { write: true },
+            writeValueWithResponse: (command: Uint8Array) => {
+              if (String(command) !== "5,2") {
+                throw new Error("Wrong sample request");
+              }
+              reader.value.setUint8(0, 0xc0);
+              reader.value.setUint8(2, 5);
+              reader.value.setInt16(3, -816, true);
+              reader.dispatchEvent(new Event("characteristicvaluechanged"));
+              return Promise.resolve();
+            },
+          };
+          const gatt = {
+            connect: (): Promise<unknown> => Promise.resolve(gatt),
+            disconnect: () => undefined,
+            getPrimaryService: (id: string) => {
+              if (id !== serviceId) {
+                throw new Error("Wrong service");
+              }
+              return Promise.resolve({
+                getCharacteristic: (characteristic: string) =>
+                  Promise.resolve(characteristic.includes("-0002-") ? writer : reader),
+              });
+            },
+          };
+          return Promise.resolve(Object.assign(new EventTarget(), { name: "Smart Cart Test", gatt }));
+        },
+      },
+    });
+  });
+  await open(page);
+  await pressButton(page, "PASCO");
+  const dialog = page.getByRole("dialog", { name: "PASCO" });
+  await dialog.getByRole("button", { name: "Connect and record" }).click();
+  await expect(dialog.getByRole("status")).toContainText(/Samples: [2-9]\d*|Samples: [1-9]\d+/);
+  await dialog.getByRole("button", { name: "Stop", exact: true }).click();
+  await dialog.getByRole("button", { name: "Use recording" }).click();
+  const active = page.getByLabel("Active run", { exact: true });
+  await expect(active.locator("option:checked")).toHaveText("Smart Cart Test");
+  await expect(page.getByLabel("Position (m), row 1", { exact: true })).toHaveValue("0");
+  expect(Number(await page.getByLabel("Position (m), row 2", { exact: true }).inputValue())).toBeCloseTo(-0.09895, 8);
+  await active.selectOption("0");
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+});

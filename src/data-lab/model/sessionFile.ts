@@ -32,8 +32,13 @@ function validRange(range: unknown): range is XRange | null {
   if (!range || typeof range !== "object") {
     return false;
   }
-  const { min, max } = range as XRange;
-  return Number.isFinite(min) && Number.isFinite(max) && min <= max;
+  const { min, max, y } = range as XRange;
+  return (
+    Number.isFinite(min) &&
+    Number.isFinite(max) &&
+    min <= max &&
+    (y === undefined || (y !== null && Number.isFinite(y.min) && Number.isFinite(y.max) && y.min <= y.max))
+  );
 }
 
 function validFit(value: unknown, dataset: Dataset): value is FitSettings {

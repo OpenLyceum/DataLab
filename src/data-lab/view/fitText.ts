@@ -61,6 +61,13 @@ export function modelNameProperties(): Record<FitModelValue, TReadOnlyProperty<s
 
 type Labels = ReturnType<StringManager["getLabels"]>;
 
+function yBounds(range: { min: number; max: number }, unit: string, labels: Labels): string {
+  return fillPattern(labels.rectangleBoundsStringProperty.value, {
+    min: withUnit(formatSignificant(range.min), unit),
+    max: withUnit(formatSignificant(range.max), unit),
+  });
+}
+
 function statusText(model: DataLabModel, labels: Labels): string {
   const inclusion = model.inclusionProperty.value;
   const range = model.rangeProperty.value;
@@ -78,6 +85,9 @@ function statusText(model: DataLabModel, labels: Labels): string {
       })
     : fillPattern(labels.statusAllStringProperty.value, { used, total });
   const notes = [status];
+  if (range?.y) {
+    notes.push(yBounds(range.y, model.yColumnProperty.value?.unit ?? "", labels));
+  }
   if (inclusion.skippedCount > 0) {
     notes.push(fillPattern(labels.statusSkippedStringProperty.value, { count: inclusion.skippedCount }));
   }
@@ -167,6 +177,7 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       ...Object.values(names),
       labels.statusAllStringProperty,
       labels.statusRangeStringProperty,
+      labels.rectangleBoundsStringProperty,
       labels.statusSkippedStringProperty,
       labels.statusInvalidUncertaintyStringProperty,
       labels.reducedChiSquaredStringProperty,
@@ -200,10 +211,11 @@ export function pinnedFitText(pin: PinnedFit): FitText {
   const labels = StringManager.getInstance().getLabels();
   const { fit, xColumn, yColumn, range } = pin;
   return {
-    status: fillPattern(labels.pinnedRangeStringProperty.value, {
-      min: withUnit(formatSignificant(range.min), xColumn.unit),
-      max: withUnit(formatSignificant(range.max), xColumn.unit),
-    }),
+    status:
+      fillPattern(labels.pinnedRangeStringProperty.value, {
+        min: withUnit(formatSignificant(range.min), xColumn.unit),
+        max: withUnit(formatSignificant(range.max), xColumn.unit),
+      }) + (range.y ? ` · ${yBounds(range.y, yColumn.unit, labels)}` : ""),
     modelName: modelNameProperties()[fit.model].value,
     equation: MODEL_EQUATIONS[fit.model],
     lines: successLines(fit, xColumn.unit, yColumn.unit, labels),

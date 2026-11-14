@@ -12,6 +12,8 @@ residuals. Data stays in the browser. The last edited table is restored on reloa
 - Import a CSV file (picker or drag-and-drop) or paste cells from a spreadsheet; comma, tab and semicolon delimiters, decimal commas, units read from headers such as `Time (s)`
 - Editable data table with row and column controls; rows used by the fit are marked, and individual rows can be excluded
 - Calculate columns with expressions such as `C1^2` or `C2/C1` and use them in plots and fits
+- Capture Smart Cart position over Web Bluetooth in a compatible browser and save it as a new run
+- Select a rectangle to constrain both x and y, or enter the bounds directly
 - Select a range of x by dragging on the graph, moving its edges with the pointer or keyboard, or typing the bounds
 - Proportional, linear, quadratic, cubic, inverse, inverse-square, and exponential least-squares fits with parameter uncertainties, units, RMSE and R²
 - Optional y-uncertainty column for weighted fits, vertical error bars, and reduced χ²
