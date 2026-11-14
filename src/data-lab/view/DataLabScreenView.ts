@@ -48,6 +48,7 @@ import {
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabPreferencesModel } from "../../preferences/DataLabPreferencesModel.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
+import { decodeSession, encodeSession, SESSION_FILE_NAME } from "../model/sessionFile.js";
 import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
 import { editCalculatedColumn } from "./editCalculatedColumn.js";
@@ -58,6 +59,7 @@ import { PlotNode } from "./PlotNode.js";
 import { ResidualPlotNode } from "./ResidualPlotNode.js";
 import { ResultsPanel } from "./ResultsPanel.js";
 import { showFitComparison } from "./showFitComparison.js";
+import { showRangeAnalysis } from "./showRangeAnalysis.js";
 
 export type DataLabScreenViewOptions = ScreenViewOptions;
 
@@ -112,7 +114,23 @@ export class DataLabScreenView extends ScreenView {
       this.graphView.autoScale();
       this.messageProperty.value = imported ? "" : labels.importFailedStringProperty.value;
     };
-    installDropTarget(importText);
+    const openSession = (text: string) => {
+      const session = decodeSession(text);
+      if (session) {
+        model.loadSession(session);
+        this.graphView.setLogAxes(session.logX, session.logY);
+        this.graphView.autoScale();
+        preferences.showResidualsProperty.value = session.showResiduals;
+      }
+      this.messageProperty.value = session ? "" : labels.sessionInvalidStringProperty.value;
+    };
+    installDropTarget((text, name) => {
+      if (name.toLowerCase().endsWith(".json")) {
+        openSession(text);
+      } else {
+        importText(text);
+      }
+    });
 
     // Ctrl+V anywhere outside a text field replaces the table with the clipboard.
     document.addEventListener("paste", (event) => {
@@ -167,10 +185,28 @@ export class DataLabScreenView extends ScreenView {
     });
     const tableButtons = new HBox({ spacing: 6, children: [addRowButton, addColumnButton, exportButton] });
 
+    const loadSessionButton = createButton(labels.openSessionStringProperty, () =>
+      openTextFile(openSession, ".json,application/json"),
+    );
+    const saveSessionButton = createButton(labels.saveSessionStringProperty, () => {
+      const text = encodeSession({
+        ...model.fitSettings(),
+        dataset: model.datasetProperty.value,
+        xColumn: model.xColumnIndexProperty.value,
+        yColumn: model.yColumnIndexProperty.value,
+        logX: this.graphView.logXProperty.value,
+        logY: this.graphView.logYProperty.value,
+        showResiduals: preferences.showResidualsProperty.value,
+        pin: model.pinnedFitProperty.value?.settings ?? null,
+      });
+      downloadText(text, SESSION_FILE_NAME, "application/json");
+    });
+    const fileButtons = new HBox({ spacing: 6, children: [calculatedButton, loadSessionButton, saveSessionButton] });
+
     const leftColumn = new VBox({
       align: "left",
       spacing: 8,
-      children: [importButtons, table, tableButtons, calculatedButton],
+      children: [importButtons, table, tableButtons, fileButtons],
       left: bounds.minX + SCREEN_VIEW_MARGIN,
       top: bounds.minY + SCREEN_VIEW_MARGIN,
     });
@@ -288,7 +324,11 @@ export class DataLabScreenView extends ScreenView {
         unitText,
       ],
     });
-    const rangeButtons = new HBox({ spacing: 6, children: [clearRangeButton, zoomButton, autoScaleButton] });
+    const analyzeButton = createButton(labels.rangeAnalysisStringProperty, () => showRangeAnalysis(model));
+    const rangeButtons = new HBox({
+      spacing: 6,
+      children: [clearRangeButton, zoomButton, autoScaleButton, analyzeButton],
+    });
 
     const pinButton = createButton(labels.pinFitStringProperty, () => model.pinFit());
     const removePinButton = createButton(labels.removePinnedFitStringProperty, () => model.clearPinnedFit());
@@ -325,12 +365,12 @@ export class DataLabScreenView extends ScreenView {
     liveStatus.setPDOMAttribute("aria-live", "polite");
     liveStatus.setPDOMAttribute("aria-atomic", "true");
     Multilink.multilink(
-      [fitTextProperty, graphView.hiddenCountProperty, labels.logHiddenStringProperty],
-      (fitText, hidden, pattern) => {
+      [fitTextProperty, graphView.hiddenCountProperty, labels.logHiddenStringProperty, this.messageProperty],
+      (fitText, hidden, pattern, message) => {
         const notice = hidden ? fillPattern(pattern, { count: hidden }) : "";
         statusText.string = fitText.status;
         logNotice.string = notice;
-        const announcement = notice ? `${fitText.status}. ${notice}` : fitText.status;
+        const announcement = [fitText.status, notice, message].filter(Boolean).join(". ");
         if (liveStatus.innerContent !== announcement) {
           liveStatus.innerContent = announcement;
         }
@@ -480,12 +520,15 @@ export class DataLabScreenView extends ScreenView {
           addRowButton,
           addColumnButton,
           calculatedButton,
+          loadSessionButton,
+          saveSessionButton,
           exportButton,
           plot.rangeStartHandle,
           plot.rangeEndHandle,
           clearRangeButton,
           zoomButton,
           autoScaleButton,
+          analyzeButton,
           liveStatus,
           logXCheckbox,
           logYCheckbox,

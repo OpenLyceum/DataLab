@@ -16,6 +16,8 @@ residuals. Data stays in the browser. The last edited table is restored on reloa
 - Proportional, linear, quadratic, cubic, inverse and inverse-square least-squares fits with parameter uncertainties, units, RMSE and R²
 - Optional y-uncertainty column for weighted fits, vertical error bars, and reduced χ²
 - Pin a fit to compare its curve and results with a second range or model
+- Save and reopen a session with table data and analysis settings
+- Analyze the selected range with descriptive statistics, a linear slope, and signed area
 - Residual graph on the same x axis
 - Switch x and y independently between linear and logarithmic display scales
 - Zoom with the wheel or a pinch, pan by dragging an axis, and return with Auto scale; zooming never changes a fit

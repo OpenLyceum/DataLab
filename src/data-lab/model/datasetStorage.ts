@@ -1,5 +1,6 @@
 /** Local recovery for the last committed table on this browser and origin. */
 
+import { compileFormula } from "../../common/model/columnFormula.js";
 import { type Column, type Dataset, recalculateColumns } from "../../common/model/Dataset.js";
 
 const STORAGE_KEY = "openlyceum.data-lab.table.v1";
@@ -25,31 +26,42 @@ function isStoredColumn(value: unknown, rowCount: number): value is StoredColumn
   );
 }
 
+export function decodeDataset(value: unknown): Dataset | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const {
+    rowCount,
+    columns,
+    excludedRows = [],
+  } = value as { rowCount?: number; columns?: unknown[]; excludedRows?: number[] };
+  if (
+    typeof rowCount !== "number" ||
+    !Number.isSafeInteger(rowCount) ||
+    rowCount < 0 ||
+    !Array.isArray(columns) ||
+    columns.length === 0 ||
+    !columns.every(
+      (column, index): column is StoredColumn =>
+        isStoredColumn(column, rowCount) &&
+        (column.formula === undefined || compileFormula(column.formula, index) !== null),
+    ) ||
+    !Array.isArray(excludedRows) ||
+    !excludedRows.every((row) => Number.isInteger(row) && row >= 0 && row < rowCount)
+  ) {
+    return null;
+  }
+  return recalculateColumns({
+    rowCount,
+    columns: columns.map((column) => ({ ...column, values: column.values.map((cell) => cell ?? Number.NaN) })),
+    excludedRows: [...new Set(excludedRows)],
+  });
+}
+
 export function restoreDataset(): Dataset | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw === null) {
-      return null;
-    }
-    const stored = JSON.parse(raw) as { rowCount?: number; columns?: unknown[]; excludedRows?: number[] };
-    const { rowCount, columns, excludedRows = [] } = stored;
-    if (
-      typeof rowCount !== "number" ||
-      !Number.isSafeInteger(rowCount) ||
-      rowCount < 0 ||
-      !Array.isArray(columns) ||
-      columns.length === 0 ||
-      !columns.every((column) => isStoredColumn(column, rowCount)) ||
-      !Array.isArray(excludedRows) ||
-      !excludedRows.every((row) => Number.isInteger(row) && row >= 0 && row < rowCount)
-    ) {
-      return null;
-    }
-    return recalculateColumns({
-      rowCount,
-      columns: columns.map((column) => ({ ...column, values: column.values.map((value) => value ?? Number.NaN) })),
-      excludedRows: [...new Set(excludedRows)],
-    });
+    return raw === null ? null : decodeDataset(JSON.parse(raw));
   } catch {
     return null;
   }

@@ -38,7 +38,10 @@ import { parseTable } from "../../common/model/parseTable.js";
 import { restoreDataset, saveDataset } from "./datasetStorage.js";
 import sampleCsv from "./samples/cart-ramp-then-level.csv?raw";
 
+import type { FitSettings, Session } from "./sessionFile.js";
+
 export type PinnedFit = {
+  readonly settings: FitSettings;
   readonly fit: FitSuccess;
   readonly range: XRange;
   readonly xValues: readonly number[];
@@ -139,6 +142,7 @@ export class DataLabModel implements TModel {
     const yColumn = this.yColumnProperty.value;
     if (fit.ok && range && xColumn && yColumn) {
       this.pinnedFit.value = {
+        settings: this.fitSettings(),
         fit,
         range,
         xColumn,
@@ -146,6 +150,31 @@ export class DataLabModel implements TModel {
         xValues: this.inclusionProperty.value.indices.map((index) => xColumn.values[index] as number),
       };
     }
+  }
+
+  public fitSettings(): FitSettings {
+    return {
+      uncertaintyColumn: this.uncertaintyColumnIndexProperty.value,
+      range: this.rangeProperty.value,
+      model: this.fitModelProperty.value,
+    };
+  }
+
+  public loadSession(session: Session): void {
+    this.reset();
+    this.datasetProperty.value = session.dataset;
+    this.xColumnIndexProperty.value = session.xColumn;
+    this.yColumnIndexProperty.value = session.yColumn;
+    const apply = (settings: FitSettings) => {
+      this.uncertaintyColumnIndexProperty.value = settings.uncertaintyColumn;
+      this.fitModelProperty.value = settings.model;
+      this.rangeProperty.value = settings.range;
+    };
+    if (session.pin) {
+      apply(session.pin);
+      this.pinFit();
+    }
+    apply(session);
   }
 
   public clearPinnedFit(): void {

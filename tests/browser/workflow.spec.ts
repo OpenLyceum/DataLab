@@ -518,3 +518,51 @@ test("log axes preserve the fit and a graph drag selects bounds in data units", 
   await expect(page.getByRole("checkbox", { name: "Log x", exact: true })).not.toBeChecked();
   expect(await includedRowCount(page)).toBe(5);
 });
+
+test("range analysis reports a measured linear slope and signed area", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Time (s),Position (m)\n0,1\n1,3\n2,5\n3,7");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await setRange(page, "1", "3");
+  await pressButton(page, "Range analysis");
+  const analysis = page.getByRole("dialog", { name: "Range analysis" });
+  await expect(analysis).toContainText("2.000 m/s");
+  await expect(analysis).toContainText("10.00 m·s");
+  await expect(analysis).toContainText("5.000 m");
+  await analysis.getByRole("button", { name: "Close" }).click();
+  await expect(analysis).toHaveCount(0);
+});
+
+test("session files restore measurements, axis settings, and both fits", async ({ page }) => {
+  await open(page);
+  await setRange(page, "1.5", "3");
+  await pressButton(page, "Pin fit");
+  await setRange(page, "0", "1.5");
+  await page.getByRole("radio", { name: "Quadratic" }).dispatchEvent("click");
+  const log = page.getByRole("checkbox", { name: "Log x", exact: true });
+  await log.dispatchEvent("click");
+  const [file] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Save session")]);
+  expect(file.suggestedFilename()).toBe("data-lab.session.json");
+  const saved = readFileSync(await file.path());
+  await pressButton(page, "Add row");
+  await expect(page.locator("tbody tr")).toHaveCount(62);
+  await pressButton(page, "Reset All");
+
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), pressButton(page, "Open session")]);
+  await chooser.setFiles({ name: file.suggestedFilename(), mimeType: "application/json", buffer: saved });
+  await expect(log).toBeChecked();
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+  await expect(page.getByLabel("Range maximum")).toHaveValue("1.5");
+  await expect(page.getByRole("button", { name: "Compare fits" })).toBeEnabled();
+  expect(await copiedResults(page)).toContain("Pinned range: 1.500 s to 3.000 s");
+
+  const [invalid] = await Promise.all([page.waitForEvent("filechooser"), pressButton(page, "Open session")]);
+  await invalid.setFiles({ name: "invalid.json", mimeType: "application/json", buffer: Buffer.from("{}") });
+  await expect(page.getByRole("status")).toContainText("This file is not a supported Data Lab session.");
+  await expect(log).toBeChecked();
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+  await expect(page.getByLabel("Range maximum")).toHaveValue("1.5");
+});

@@ -126,8 +126,15 @@ linear. Error bars that cross zero on log y are clipped at the graph edge.
 
 All 0.2 features are implemented.
 
-0.3: nonlinear models (Levenberg–Marquardt); multiple runs; session files;
-statistics, slope and area on a range.
+Done for 0.3: versioned JSON session files and range statistics, slope, and
+signed area. Sessions restore table data, formulas, exclusions, axes, log
+scales, residual visibility, fit configuration, range, and the pinned fit.
+Graph zoom is recalculated on open. Range analysis uses valid x–y pairs in
+the selected range, omits manually excluded rows, and uses an unweighted
+linear slope independent of the fit settings. Trapezoids join consecutive
+measured x values after averaging measurements with repeated x.
+
+Remaining for 0.3: nonlinear models (Levenberg–Marquardt) and multiple runs.
 
 Later: sensor capture over Web Bluetooth; rectangle selection; PDF report;
 a shared fleet package for graph, table and fit code.
