@@ -13,7 +13,7 @@ residuals. Data stays in the browser. The last edited table is restored on reloa
 - Editable data table with row and column controls; rows used by the fit are marked, and individual rows can be excluded
 - Calculate columns with expressions such as `C1^2` or `C2/C1` and use them in plots and fits
 - Select a range of x by dragging on the graph, moving its edges with the pointer or keyboard, or typing the bounds
-- Proportional, linear, quadratic, cubic, inverse and inverse-square least-squares fits with parameter uncertainties, units, RMSE and R²
+- Proportional, linear, quadratic, cubic, inverse, inverse-square, and exponential least-squares fits with parameter uncertainties, units, RMSE and R²
 - Optional y-uncertainty column for weighted fits, vertical error bars, and reduced χ²
 - Pin a fit to compare its curve and results with a second range or model
 - Save and reopen a session with table data and analysis settings

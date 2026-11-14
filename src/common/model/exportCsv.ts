@@ -53,11 +53,11 @@ export function exportCsv(dataset: Dataset, fitExport: FitExport | null): string
       const { fit, inclusion, xColumnIndex } = fitExport;
       const x = dataset.columns[xColumnIndex]?.values[row] ?? Number.NaN;
       cells.push(inclusion.flags[row] ? "1" : "0");
-      cells.push(
+      const prediction =
         fit.ok && Number.isFinite(x) && supportsFitX(fit.model, x)
-          ? String(evaluateFit(fit.model, fit.parameters, x))
-          : "",
-      );
+          ? evaluateFit(fit.model, fit.parameters, x)
+          : Number.NaN;
+      cells.push(Number.isFinite(prediction) ? String(prediction) : "");
       const residual = residualByRow.get(row);
       cells.push(residual === undefined ? "" : String(residual));
     }

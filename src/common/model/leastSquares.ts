@@ -15,6 +15,9 @@
  * points are left over after the parameters are determined (n > p).
  */
 
+import { exponentialValue, solveExponential } from "./exponentialFit.js";
+import { backSubstitute, householder, isRankDeficient, standardErrorsOf } from "./qr.js";
+
 export const FitModel = {
   PROPORTIONAL: "proportional",
   LINEAR: "linear",
@@ -22,12 +25,13 @@ export const FitModel = {
   CUBIC: "cubic",
   INVERSE: "inverse",
   INVERSE_SQUARE: "inverseSquare",
+  EXPONENTIAL: "exponential",
 } as const;
 
 export type FitModelValue = (typeof FitModel)[keyof typeof FitModel];
 
 /** Powers of x in each model, in the order its parameters are reported. */
-export const MODEL_POWERS: Record<FitModelValue, readonly number[]> = {
+export const MODEL_POWERS: Record<Exclude<FitModelValue, "exponential">, readonly number[]> = {
   proportional: [1],
   linear: [1, 0],
   quadratic: [2, 1, 0],
@@ -44,6 +48,7 @@ export const FitFailureReason = {
   /** Proportional fit where every x is zero. */
   ALL_X_ZERO: "allXZero",
   INVALID_UNCERTAINTY: "invalidUncertainty",
+  NONLINEAR_FAILURE: "nonlinearFailure",
   UNSUPPORTED_X: "unsupportedX",
 } as const;
 
@@ -52,7 +57,7 @@ export type FitFailureReasonValue = (typeof FitFailureReason)[keyof typeof FitFa
 export type FitSuccess = {
   readonly ok: true;
   readonly model: FitModelValue;
-  /** Parameter values, ordered as in MODEL_POWERS (highest power of x first). */
+  /** Model coefficients, with the fixed reference x appended for an exponential fit. */
   readonly parameters: readonly number[];
   /** Parameter uncertainty from supplied σ, or from residual scatter when n > p. */
   readonly standardErrors: readonly number[] | null;
@@ -81,9 +86,6 @@ export type FitFailure = {
 
 export type FitResult = FitSuccess | FitFailure;
 
-/** Relative size below which a diagonal entry of R marks a rank-deficient fit. */
-const RANK_TOLERANCE = 1e-10;
-
 function binomial(n: number, k: number): number {
   let result = 1;
   for (let i = 1; i <= k; i++) {
@@ -94,11 +96,15 @@ function binomial(n: number, k: number): number {
 
 /** Reciprocal models are linear in x raised to their leading power. */
 export function usesReciprocalX(model: FitModelValue): boolean {
-  return (MODEL_POWERS[model][0] as number) < 0;
+  return model === FitModel.INVERSE || model === FitModel.INVERSE_SQUARE;
 }
 
 export function supportsFitX(model: FitModelValue, x: number): boolean {
-  return !usesReciprocalX(model) || Number.isFinite(x ** (MODEL_POWERS[model][0] as number));
+  return (
+    model === FitModel.EXPONENTIAL ||
+    !usesReciprocalX(model) ||
+    Number.isFinite(x ** (MODEL_POWERS[model][0] as number))
+  );
 }
 
 /** A standard uncertainty must be finite and strictly positive. */
@@ -108,6 +114,10 @@ export function validUncertainty(sigma: number | undefined): sigma is number {
 
 /** Evaluates a fitted model at x. */
 export function evaluateFit(model: FitModelValue, parameters: readonly number[], x: number): number {
+  if (model === FitModel.EXPONENTIAL) {
+    const [amplitude, rate, reference] = parameters as readonly [number, number, number];
+    return exponentialValue(amplitude, rate * (x - reference));
+  }
   if (!supportsFitX(model, x)) {
     return Number.NaN;
   }
@@ -117,73 +127,6 @@ export function evaluateFit(model: FitModelValue, parameters: readonly number[],
     y += (parameters[j] as number) * x ** (powers[j] as number);
   }
   return y;
-}
-
-/**
- * Householder QR of the n×p matrix `a` (row-major, modified in place) applied to
- * the right-hand side `b` (modified in place). Afterwards the upper triangle of
- * `a` holds R and the first p entries of `b` hold Qᵀb.
- */
-function householder(a: number[][], b: number[], n: number, p: number): void {
-  for (let k = 0; k < p; k++) {
-    let norm = 0;
-    for (let i = k; i < n; i++) {
-      norm = Math.hypot(norm, (a[i] as number[])[k] as number);
-    }
-    if (norm === 0) {
-      continue;
-    }
-    const pivotRow = a[k] as number[];
-    const alpha = (pivotRow[k] as number) > 0 ? -norm : norm;
-    // v = column k below the diagonal, with alpha subtracted from its head.
-    const v = new Array<number>(n - k);
-    for (let i = k; i < n; i++) {
-      v[i - k] = (a[i] as number[])[k] as number;
-    }
-    v[0] = (v[0] as number) - alpha;
-    let vDotV = 0;
-    for (const value of v) {
-      vDotV += value * value;
-    }
-    if (vDotV === 0) {
-      continue;
-    }
-    for (let j = k; j < p; j++) {
-      let dot = 0;
-      for (let i = k; i < n; i++) {
-        dot += (v[i - k] as number) * ((a[i] as number[])[j] as number);
-      }
-      const scale = (2 * dot) / vDotV;
-      for (let i = k; i < n; i++) {
-        const row = a[i] as number[];
-        row[j] = (row[j] as number) - scale * (v[i - k] as number);
-      }
-    }
-    let dot = 0;
-    for (let i = k; i < n; i++) {
-      dot += (v[i - k] as number) * (b[i] as number);
-    }
-    const scale = (2 * dot) / vDotV;
-    for (let i = k; i < n; i++) {
-      b[i] = (b[i] as number) - scale * (v[i - k] as number);
-    }
-  }
-}
-
-/** Inverse of the upper-triangular p×p block of `r`. */
-function invertUpperTriangular(r: number[][], p: number): number[][] {
-  const inverse: number[][] = Array.from({ length: p }, () => new Array<number>(p).fill(0));
-  for (let j = 0; j < p; j++) {
-    (inverse[j] as number[])[j] = 1 / ((r[j] as number[])[j] as number);
-    for (let i = j - 1; i >= 0; i--) {
-      let sum = 0;
-      for (let k = i + 1; k <= j; k++) {
-        sum += ((r[i] as number[])[k] as number) * ((inverse[k] as number[])[j] as number);
-      }
-      (inverse[i] as number[])[j] = -sum / ((r[i] as number[])[i] as number);
-    }
-  }
-  return inverse;
 }
 
 /** The reason these points cannot determine the model's parameters, or null when they can. */
@@ -201,52 +144,6 @@ function unsolvableReason(
     return new Set(used).size < p ? FitFailureReason.TOO_FEW_DISTINCT_X : null;
   }
   return used.every((x) => x === 0) ? FitFailureReason.ALL_X_ZERO : null;
-}
-
-/** Solves R·β = Qᵀy by back-substitution, R being the upper triangle of `r`. */
-function backSubstitute(r: number[][], qty: number[], p: number): number[] {
-  const solution = new Array<number>(p).fill(0);
-  for (let j = p - 1; j >= 0; j--) {
-    let sum = qty[j] as number;
-    for (let k = j + 1; k < p; k++) {
-      sum -= ((r[j] as number[])[k] as number) * (solution[k] as number);
-    }
-    solution[j] = sum / ((r[j] as number[])[j] as number);
-  }
-  return solution;
-}
-
-/** True when a diagonal entry of R is negligible beside the largest: the columns are dependent. */
-function isRankDeficient(r: number[][], p: number): boolean {
-  let largest = 0;
-  for (let j = 0; j < p; j++) {
-    largest = Math.max(largest, Math.abs((r[j] as number[])[j] as number));
-  }
-  for (let j = 0; j < p; j++) {
-    if (Math.abs((r[j] as number[])[j] as number) <= RANK_TOLERANCE * largest) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Standard errors of the parameters: Cov(β) = σ²·R⁻¹R⁻ᵀ, so
- * Cov(parameters) = σ²·(T·R⁻¹)(T·R⁻¹)ᵀ, T being the map back to powers of x.
- */
-function standardErrorsOf(transform: number[][], r: number[][], p: number, variance: number): number[] {
-  const rInverse = invertUpperTriangular(r, p);
-  return transform.map((row) => {
-    let sumSquares = 0;
-    for (let m = 0; m < p; m++) {
-      let entry = 0;
-      for (let k = 0; k < p; k++) {
-        entry += (row[k] as number) * ((rInverse[k] as number[])[m] as number);
-      }
-      sumSquares += entry * entry;
-    }
-    return Math.sqrt(variance * sumSquares);
-  });
 }
 
 function applyWeights(
@@ -277,6 +174,50 @@ function coefficientOfDetermination(
   return totalSumSquares > 0 ? 1 - sumSquaredResiduals / totalSumSquares : null;
 }
 
+function fitExponential(xs: readonly number[], ys: readonly number[], uncertainties?: readonly number[]): FitResult {
+  const count = Math.min(xs.length, ys.length);
+  const model = FitModel.EXPONENTIAL;
+  const required = 2;
+  const fail = (reason: FitFailureReasonValue): FitFailure => ({ ok: false, model, reason, required, count });
+  const obstacle = unsolvableReason(xs, count, required, true);
+  if (obstacle) {
+    return fail(obstacle);
+  }
+  if (uncertainties && (uncertainties.length !== count || uncertainties.some((sigma) => !validUncertainty(sigma)))) {
+    return fail(FitFailureReason.INVALID_UNCERTAINTY);
+  }
+  const solution = solveExponential(xs.slice(0, count), ys.slice(0, count), uncertainties);
+  if (!solution) {
+    return fail(FitFailureReason.NONLINEAR_FAILURE);
+  }
+  const { parameters, residuals, standardErrors } = solution;
+  const degreesOfFreedom = count - required;
+  const sumSquaredResiduals = residuals.reduce((sum, residual) => sum + residual ** 2, 0);
+  return {
+    ok: true,
+    model,
+    parameters,
+    standardErrors,
+    count,
+    degreesOfFreedom,
+    residuals,
+    sumSquaredResiduals,
+    rmse: degreesOfFreedom > 0 ? Math.sqrt(sumSquaredResiduals / degreesOfFreedom) : null,
+    rSquared: null,
+    reducedChiSquared: reducedChiSquared(residuals, uncertainties, degreesOfFreedom),
+  };
+}
+
+function reducedChiSquared(
+  residuals: readonly number[],
+  uncertainties: readonly number[] | undefined,
+  degreesOfFreedom: number,
+): number | null {
+  return uncertainties && degreesOfFreedom > 0
+    ? residuals.reduce((sum, residual, i) => sum + (residual / (uncertainties[i] as number)) ** 2, 0) / degreesOfFreedom
+    : null;
+}
+
 /**
  * Fits `model` to the points (xs[i], ys[i]). Every value must be finite — filter
  * with includedRows() first.
@@ -287,6 +228,9 @@ export function fitModel(
   ys: readonly number[],
   uncertainties?: readonly number[],
 ): FitResult {
+  if (model === FitModel.EXPONENTIAL) {
+    return fitExponential(xs, ys, uncertainties);
+  }
   const n = Math.min(xs.length, ys.length);
   const reciprocal = usesReciprocalX(model);
   const powers = reciprocal ? MODEL_POWERS.linear : MODEL_POWERS[model];
@@ -392,10 +336,6 @@ export function fitModel(
       !uncertainties && hasIntercept && degreesOfFreedom > 0
         ? coefficientOfDetermination(ys, n, meanY, sumSquaredResiduals)
         : null,
-    reducedChiSquared:
-      uncertainties && degreesOfFreedom > 0
-        ? residuals.reduce((sum, residual, i) => sum + (residual / (uncertainties[i] as number)) ** 2, 0) /
-          degreesOfFreedom
-        : null,
+    reducedChiSquared: reducedChiSquared(residuals, uncertainties, degreesOfFreedom),
   };
 }

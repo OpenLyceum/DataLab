@@ -134,7 +134,11 @@ the selected range, omits manually excluded rows, and uses an unweighted
 linear slope independent of the fit settings. Trapezoids join consecutive
 measured x values after averaging measurements with repeated x.
 
-Remaining for 0.3: nonlinear models (Levenberg–Marquardt) and multiple runs.
+Nonlinear fitting starts with an exponential growth or decay model. It uses
+Levenberg–Marquardt on the original y measurements and supports the optional y
+uncertainty column. The reference x₀ is fixed to the smallest x in the fit.
+
+Remaining for 0.3: multiple runs.
 
 Later: sensor capture over Web Bluetooth; rectangle selection; PDF report;
 a shared fleet package for graph, table and fit code.

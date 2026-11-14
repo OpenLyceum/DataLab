@@ -18,6 +18,7 @@ import {
 import {
   type FitFailure,
   FitFailureReason,
+  FitModel,
   type FitModelValue,
   type FitSuccess,
   MODEL_POWERS,
@@ -54,6 +55,7 @@ export function modelNameProperties(): Record<FitModelValue, TReadOnlyProperty<s
     cubic: labels.cubicStringProperty,
     inverse: labels.inverseStringProperty,
     inverseSquare: labels.inverseSquareStringProperty,
+    exponential: labels.exponentialStringProperty,
   };
 }
 
@@ -93,10 +95,16 @@ function statusText(model: DataLabModel, labels: Labels): string {
 /** One line per parameter, then RMSE, R² and the number of points. */
 function successLines(fit: FitSuccess, xUnit: string, yUnit: string, labels: Labels): string[] {
   const symbols = MODEL_SYMBOLS[fit.model];
-  const powers = MODEL_POWERS[fit.model];
   const lines = fit.parameters.map((value, j) => {
-    const formatted = formatWithUncertainty(value, fit.standardErrors?.[j] ?? null);
-    return `${symbols[j]} = ${withUnit(formatted, parameterUnit(xUnit, yUnit, powers[j] as number))}`;
+    const formatted =
+      fit.model === FitModel.EXPONENTIAL && j === 2
+        ? String(value)
+        : formatWithUncertainty(value, fit.standardErrors?.[j] ?? null);
+    const unit =
+      fit.model === FitModel.EXPONENTIAL
+        ? ([yUnit, parameterUnit(xUnit, "", 1), xUnit][j] ?? "")
+        : parameterUnit(xUnit, yUnit, MODEL_POWERS[fit.model][j] as number);
+    return `${symbols[j]} = ${withUnit(formatted, unit)}`;
   });
   if (fit.rmse !== null) {
     lines.push(
@@ -128,6 +136,9 @@ function cautionText(fit: FitSuccess, labels: Labels): string {
 }
 
 function failureLine(fit: FitFailure, labels: Labels): string {
+  if (fit.reason === FitFailureReason.NONLINEAR_FAILURE) {
+    return labels.nonlinearFailureStringProperty.value;
+  }
   if (fit.reason === FitFailureReason.INVALID_UNCERTAINTY) {
     return fillPattern(labels.statusInvalidUncertaintyStringProperty.value, { count: fit.count });
   }
@@ -167,6 +178,7 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       labels.tooFewDistinctXStringProperty,
       labels.allXZeroStringProperty,
       labels.noScatterStringProperty,
+      labels.nonlinearFailureStringProperty,
       labels.fewPointsStringProperty,
     ],
     (): FitText => {

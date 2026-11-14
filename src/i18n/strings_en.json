@@ -53,6 +53,8 @@
     "quadratic": "Quadratic",
     "cubic": "Cubic",
     "inverse": "Inverse",
+    "exponential": "Exponential",
+    "nonlinearFailure": "The exponential fit could not determine a reliable amplitude and rate.",
     "inverseSquare": "Inverse square",
     "statusUnsupported": "{{count}} skipped (undefined reciprocal x)",
     "uncertaintyColumn": "Y uncertainty (σ)",

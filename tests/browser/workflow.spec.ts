@@ -566,3 +566,24 @@ test("session files restore measurements, axis settings, and both fits", async (
   await expect(page.locator("tbody tr")).toHaveCount(61);
   await expect(page.getByLabel("Range maximum")).toHaveValue("1.5");
 });
+
+test("exponential fits use original measurements and export their predictions", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    const rows = [0, 1, 2, 3, 4].map((t) => `${10 + t},${4 * Math.exp(-0.5 * t)}`);
+    data.setData("text/plain", ["Time (s),Signal (V)", ...rows].join("\n"));
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await page.getByRole("radio", { name: "Exponential", exact: true }).dispatchEvent("click");
+  const summary = await copiedResults(page);
+  expect(summary).toContain("Exponential: y = A·exp(k·(x − x₀))");
+  expect(summary).toMatch(/^k = .* 1\/s$/m);
+  expect(summary).toContain("Points used: 5");
+  const [download] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
+  const row = readFileSync(await download.path(), "utf8")
+    .split("\n")[3]
+    ?.split(",");
+  expect(Number(row?.[3])).toBeCloseTo(4 * Math.exp(-1), 10);
+  expect(Number(row?.[4])).toBeCloseTo(0, 10);
+});

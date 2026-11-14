@@ -6,7 +6,7 @@
  * SceneryStack imports.
  */
 
-import { type FitModelValue, MODEL_POWERS } from "./leastSquares.js";
+import { FitModel, type FitModelValue } from "./leastSquares.js";
 
 /** Parameter symbols, in the order the fit reports its parameters. */
 export const MODEL_SYMBOLS: Record<FitModelValue, readonly string[]> = {
@@ -16,6 +16,7 @@ export const MODEL_SYMBOLS: Record<FitModelValue, readonly string[]> = {
   cubic: ["A", "B", "C", "D"],
   inverse: ["A", "B"],
   inverseSquare: ["A", "B"],
+  exponential: ["A", "k", "x₀"],
 };
 
 /** The model written out. Mathematical notation, the same in every language. */
@@ -26,9 +27,10 @@ export const MODEL_EQUATIONS: Record<FitModelValue, string> = {
   cubic: "y = A·x³ + B·x² + C·x + D",
   inverse: "y = A/x + B",
   inverseSquare: "y = A/x² + B",
+  exponential: "y = A·exp(k·(x − x₀))",
 };
 
-export const FIT_MODELS: readonly FitModelValue[] = Object.keys(MODEL_POWERS) as FitModelValue[];
+export const FIT_MODELS: readonly FitModelValue[] = Object.values(FitModel);
 
 /** Significant figures kept in an uncertainty, and so in the value it belongs to. */
 const UNCERTAINTY_DIGITS = 2;

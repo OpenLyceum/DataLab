@@ -108,3 +108,13 @@ Parameter uncertainties use the supplied σ as absolute standard deviations.
 They are not scaled by the reduced χ². Reduced χ² is the sum of squared
 standardized residuals divided by n − p, and is reported only when n > p.
 RMSE and exported residuals stay in y units.
+
+## Exponential fit
+
+Data Lab fits `y = A·exp(k·(x − x₀))`, with x₀ fixed at the smallest included
+x. The amplitude A is the modeled y at that reference, and k has inverse x
+units. Levenberg–Marquardt minimizes the original-y residuals using damped QR
+steps. The log of the magnitude of y provides only a starting estimate, so
+zero and negative observations still enter the objective. The final Jacobian
+provides local parameter uncertainties. If an uncertainty column is selected,
+the same absolute-σ convention and reduced χ² as for weighted linear fits apply.

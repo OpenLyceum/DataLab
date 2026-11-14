@@ -53,6 +53,8 @@
     "quadratic": "Quadratique",
     "cubic": "Cubique",
     "inverse": "Inverse",
+    "exponential": "Exponentiel",
+    "nonlinearFailure": "L’ajustement exponentiel n’a pas pu déterminer une amplitude et un taux fiables.",
     "inverseSquare": "Inverse du carré",
     "statusUnsupported": "{{count}} ignorées (inverse de x indéfini)",
     "uncertaintyColumn": "Incertitude sur y (σ)",
