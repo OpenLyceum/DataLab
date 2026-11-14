@@ -64,9 +64,9 @@ export class DataLabModel implements TModel {
       (dataset) => dataset.excludedRows ?? noExclusions,
     );
     this.inclusionProperty = new DerivedProperty(
-      [this.xColumnProperty, this.yColumnProperty, this.rangeProperty, excludedRowsProperty],
-      (xColumn, yColumn, range, excludedRows) =>
-        includedRows(xColumn?.values ?? [], yColumn?.values ?? [], range, excludedRows),
+      [this.xColumnProperty, this.yColumnProperty, this.rangeProperty, excludedRowsProperty, this.fitModelProperty],
+      (xColumn, yColumn, range, excludedRows, model) =>
+        includedRows(xColumn?.values ?? [], yColumn?.values ?? [], range, excludedRows, model),
     );
 
     this.fitProperty = new DerivedProperty(

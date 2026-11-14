@@ -400,3 +400,21 @@ test("a manually excluded point stays out of the fit after editing and reload", 
   await shifted.uncheck();
   expect(await includedRowCount(page)).toBe(60);
 });
+
+test("inverse fits skip zero and leave its prediction blank in CSV", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData("text/plain", "Distance (m),Signal (V)\n-2,0\n-1,-2\n0,99\n1,6\n2,4\n4,3");
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await page.getByRole("radio", { name: "Inverse", exact: true }).dispatchEvent("click");
+  await expect(page.getByRole("status")).toContainText("1 skipped (undefined reciprocal x)");
+  expect(await includedRowCount(page)).toBe(5);
+  const summary = await copiedResults(page);
+  expect(summary).toContain("y = A/x + B");
+  expect(parameter(summary, "A")).toBeCloseTo(4);
+  expect(summary).toMatch(/^A = .* V·m$/m);
+  const [download] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
+  expect(readFileSync(await download.path(), "utf8").split("\n")[3]).toBe("0,99,0,,");
+});

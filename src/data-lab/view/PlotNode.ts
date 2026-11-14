@@ -20,7 +20,7 @@ import { Shape } from "scenerystack/kite";
 import { DragListener, KeyboardListener, Line, Node, Path, Rectangle } from "scenerystack/scenery";
 import { columnLabel } from "../../common/model/Dataset.js";
 import type { XRange } from "../../common/model/includedRows.js";
-import { evaluateFit } from "../../common/model/leastSquares.js";
+import { evaluateFit, type FitSuccess, usesReciprocalX } from "../../common/model/leastSquares.js";
 import { ChartFrameNode } from "../../common/view/ChartFrameNode.js";
 import { installGraphGestures } from "../../common/view/GraphGestures.js";
 import { PointsCanvasNode } from "../../common/view/PointsCanvasNode.js";
@@ -282,6 +282,26 @@ export class PlotNode extends Node {
       rangeEndHandle.visible = range !== null && inView(x1);
     };
 
+    const appendCurveBranch = (shape: Shape, fit: FitSuccess, min: number, max: number) => {
+      let started = false;
+      for (let k = 0; k <= CURVE_SAMPLES; k++) {
+        const x = k === CURVE_SAMPLES ? max : min + ((max - min) * k) / CURVE_SAMPLES;
+        const y = evaluateFit(fit.model, fit.parameters, x);
+        if (!Number.isFinite(y)) {
+          started = false;
+          continue;
+        }
+        const viewX = chartTransform.modelToViewX(x);
+        const viewY = chartTransform.modelToViewY(y);
+        if (started) {
+          shape.lineTo(viewX, viewY);
+        } else {
+          shape.moveTo(viewX, viewY);
+          started = true;
+        }
+      }
+    };
+
     const updateCurve = () => {
       const fit = model.fitProperty.value;
       const xColumn = model.xColumnProperty.value;
@@ -290,24 +310,24 @@ export class PlotNode extends Node {
         fitCurve.shape = null;
         return;
       }
-      // The curve spans the points it was fitted to, and no further.
-      let min = Number.POSITIVE_INFINITY;
-      let max = Number.NEGATIVE_INFINITY;
-      for (const i of indices) {
-        const x = xColumn.values[i] as number;
-        min = Math.min(min, x);
-        max = Math.max(max, x);
-      }
+      // Reciprocal curves have separate branches on either side of zero.
+      const xValues = indices.map((index) => xColumn.values[index] as number);
+      const branches = usesReciprocalX(fit.model)
+        ? [xValues.filter((x) => x < 0), xValues.filter((x) => x > 0)]
+        : [xValues];
       const shape = new Shape();
-      for (let k = 0; k <= CURVE_SAMPLES; k++) {
-        const x = min + ((max - min) * k) / CURVE_SAMPLES;
-        const viewX = chartTransform.modelToViewX(x);
-        const viewY = chartTransform.modelToViewY(evaluateFit(fit.model, fit.parameters, x));
-        if (k === 0) {
-          shape.moveTo(viewX, viewY);
-        } else {
-          shape.lineTo(viewX, viewY);
+      const visible = graphView.xAxisRangeProperty.value;
+      for (const branch of branches) {
+        const extent = branch.reduce((bounds, x) => ({ min: Math.min(bounds.min, x), max: Math.max(bounds.max, x) }), {
+          min: Number.POSITIVE_INFINITY,
+          max: Number.NEGATIVE_INFINITY,
+        });
+        const min = Math.max(extent.min, visible.min);
+        const max = Math.min(extent.max, visible.max);
+        if (!(min < max)) {
+          continue;
         }
+        appendCurveBranch(shape, fit, min, max);
       }
       fitCurve.shape = shape;
     };

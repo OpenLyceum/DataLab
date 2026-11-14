@@ -51,6 +51,9 @@ export function modelNameProperties(): Record<FitModelValue, TReadOnlyProperty<s
     proportional: labels.proportionalStringProperty,
     linear: labels.linearStringProperty,
     quadratic: labels.quadraticStringProperty,
+    cubic: labels.cubicStringProperty,
+    inverse: labels.inverseStringProperty,
+    inverseSquare: labels.inverseSquareStringProperty,
   };
 }
 
@@ -72,9 +75,14 @@ function statusText(model: DataLabModel, labels: Labels): string {
         max: withUnit(formatSignificant(range.max), xUnit),
       })
     : fillPattern(labels.statusAllStringProperty.value, { used, total });
-  return inclusion.skippedCount > 0
-    ? `${status} · ${fillPattern(labels.statusSkippedStringProperty.value, { count: inclusion.skippedCount })}`
-    : status;
+  const notes = [status];
+  if (inclusion.skippedCount > 0) {
+    notes.push(fillPattern(labels.statusSkippedStringProperty.value, { count: inclusion.skippedCount }));
+  }
+  if (inclusion.unsupportedCount > 0) {
+    notes.push(fillPattern(labels.statusUnsupportedStringProperty.value, { count: inclusion.unsupportedCount }));
+  }
+  return notes.join(" · ");
 }
 
 /** One line per parameter, then RMSE, R² and the number of points. */
@@ -107,6 +115,9 @@ function cautionText(fit: FitSuccess, labels: Labels): string {
 }
 
 function failureLine(fit: FitFailure, labels: Labels): string {
+  if (fit.reason === FitFailureReason.UNSUPPORTED_X) {
+    return fillPattern(labels.statusUnsupportedStringProperty.value, { count: fit.count });
+  }
   const pattern =
     fit.reason === FitFailureReason.TOO_FEW_POINTS
       ? labels.tooFewPointsStringProperty.value
@@ -126,12 +137,11 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       model.inclusionProperty,
       model.fitProperty,
       model.rangeProperty,
-      names.proportional,
-      names.linear,
-      names.quadratic,
+      ...Object.values(names),
       labels.statusAllStringProperty,
       labels.statusRangeStringProperty,
       labels.statusSkippedStringProperty,
+      labels.statusUnsupportedStringProperty,
       labels.pointsUsedStringProperty,
       labels.rmseStringProperty,
       labels.rSquaredStringProperty,

@@ -84,3 +84,14 @@ The fit engine reproduces the certified parameter estimates, standard deviations
 and residual standard deviation of four NIST Statistical Reference Datasets
 (Norris, Pontius, NoInt1, NoInt2) to nine significant digits; see
 `tests/fixtures/nist/README.md`.
+
+
+## Cubic and reciprocal models
+
+The cubic model extends the polynomial design matrix to degree three.
+The inverse and inverse-square models use the same linear solver with
+predictors \(1/x\) and \(1/x^2\), respectively, and a free intercept.
+The residuals and RMSE remain in the original y units. Measurements whose
+reciprocal predictor is undefined remain in the table and scatter plot.
+The fit and residual plot omit those rows, and CSV leaves both prediction
+and residual blank for them.

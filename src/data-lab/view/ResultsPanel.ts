@@ -19,8 +19,8 @@ const LINE_FONT = new PhetFont(13);
 const NOTE_FONT = new PhetFont(11);
 const LINE_SPACING = 5;
 
-/** Most lines a fit produces: three parameters, RMSE, R², points used. */
-const MAX_LINES = 6;
+/** Most lines a fit produces: four parameters, RMSE, R², points used. */
+const MAX_LINES = 7;
 
 export class ResultsPanel extends DataLabPanel {
   public constructor(fitTextProperty: TReadOnlyProperty<FitText>, contentWidth: number) {

@@ -190,3 +190,48 @@ describe("fitModel", () => {
     });
   });
 });
+
+describe("additional regression models", () => {
+  // Paired ±0.2 measurement errors cancel at each x, so the generating
+  // coefficients are the exact least-squares solution and SSR is n × 0.04.
+  it.each([
+    {
+      model: FitModel.CUBIC,
+      xs: [-2, -1, 0, 1, 2],
+      evaluate: (x: number) => 2 * x ** 3 - 3 * x * x + x + 4,
+      coefficients: [2, -3, 1, 4],
+    },
+    { model: FitModel.INVERSE, xs: [-4, -2, 1, 2, 4], evaluate: (x: number) => 6 / x - 2, coefficients: [6, -2] },
+    {
+      model: FitModel.INVERSE_SQUARE,
+      xs: [-4, -2, 1, 2, 4],
+      evaluate: (x: number) => 8 / (x * x) + 3,
+      coefficients: [8, 3],
+    },
+  ])("recovers the analytic coefficients for $model", ({ model, xs, evaluate, coefficients }) => {
+    const fit = fitModel(
+      model,
+      xs.flatMap((x) => [x, x]),
+      xs.flatMap((x) => [evaluate(x) - 0.2, evaluate(x) + 0.2]),
+    );
+    expect(fit.ok).toBe(true);
+    if (fit.ok) {
+      for (const [i, expected] of coefficients.entries()) {
+        expect(fit.parameters[i]).toBeCloseTo(expected, 11);
+      }
+      expect(fit.sumSquaredResiduals).toBeCloseTo(0.4, 12);
+      expect(evaluateFit(model, fit.parameters, 3)).toBeCloseTo(evaluate(3), 11);
+    }
+  });
+
+  it("rejects zero for an inverse model and recognizes equal squared predictors", () => {
+    expect(fitModel(FitModel.INVERSE, [0, 1], [1, 2])).toMatchObject({
+      ok: false,
+      reason: FitFailureReason.UNSUPPORTED_X,
+    });
+    expect(fitModel(FitModel.INVERSE_SQUARE, [-2, 2], [1, 2])).toMatchObject({
+      ok: false,
+      reason: FitFailureReason.TOO_FEW_DISTINCT_X,
+    });
+  });
+});

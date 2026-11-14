@@ -12,7 +12,7 @@
 
 import { columnLabel, type Dataset } from "./Dataset.js";
 import type { Inclusion } from "./includedRows.js";
-import { evaluateFit, type FitResult } from "./leastSquares.js";
+import { evaluateFit, type FitResult, supportsFitX } from "./leastSquares.js";
 
 export const IN_FIT_HEADER = "in_fit";
 export const FIT_VALUE_HEADER = "fit_value";
@@ -53,7 +53,11 @@ export function exportCsv(dataset: Dataset, fitExport: FitExport | null): string
       const { fit, inclusion, xColumnIndex } = fitExport;
       const x = dataset.columns[xColumnIndex]?.values[row] ?? Number.NaN;
       cells.push(inclusion.flags[row] ? "1" : "0");
-      cells.push(fit.ok && Number.isFinite(x) ? String(evaluateFit(fit.model, fit.parameters, x)) : "");
+      cells.push(
+        fit.ok && Number.isFinite(x) && supportsFitX(fit.model, x)
+          ? String(evaluateFit(fit.model, fit.parameters, x))
+          : "",
+      );
       const residual = residualByRow.get(row);
       cells.push(residual === undefined ? "" : String(residual));
     }

@@ -10,6 +10,8 @@
  * than a first and last row.
  */
 
+import { type FitModelValue, supportsFitX } from "./leastSquares.js";
+
 /** A selected x interval in data units. `min` ≤ `max`. */
 export type XRange = {
   readonly min: number;
@@ -23,6 +25,7 @@ export type Inclusion = {
   readonly flags: readonly boolean[];
   /** Rows left out because x or y is blank or not a number. */
   readonly skippedCount: number;
+  readonly unsupportedCount: number;
   /** Rows with a numeric x and y, whether or not they are in range. */
   readonly validCount: number;
 };
@@ -37,21 +40,27 @@ export function includedRows(
   ys: readonly number[],
   range: XRange | null,
   excludedRows: readonly number[] = [],
+  model?: FitModelValue,
 ): Inclusion {
   const excluded = new Set(excludedRows);
   const rowCount = Math.min(xs.length, ys.length);
   const indices: number[] = [];
   const flags: boolean[] = new Array<boolean>(rowCount).fill(false);
   let skippedCount = 0;
+  let unsupportedCount = 0;
   for (let i = 0; i < rowCount; i++) {
     const x = xs[i] as number;
     const y = ys[i] as number;
     if (!(Number.isFinite(x) && Number.isFinite(y))) {
       skippedCount++;
     } else if (!excluded.has(i) && (range === null || (x >= range.min && x <= range.max))) {
+      if (model && !supportsFitX(model, x)) {
+        unsupportedCount++;
+        continue;
+      }
       indices.push(i);
       flags[i] = true;
     }
   }
-  return { indices, flags, skippedCount, validCount: rowCount - skippedCount };
+  return { indices, flags, skippedCount, unsupportedCount, validCount: rowCount - skippedCount };
 }

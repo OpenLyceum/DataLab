@@ -1,9 +1,8 @@
 /**
  * leastSquares.ts
  *
- * Ordinary least squares for the polynomial models students fit: proportional
- * (y = A·x), linear (y = m·x + b) and quadratic (y = A·x² + B·x + C). Pure, no
- * SceneryStack imports.
+ * Ordinary least squares for polynomial and reciprocal models. Reciprocal models
+ * use x⁻¹ or x⁻² as the predictor, with a fitted intercept. Pure TypeScript.
  *
  * Method: x is shifted to its mean and scaled to [−1, 1], the design matrix is
  * factored by Householder QR, and the coefficients and their covariance are then
@@ -20,6 +19,9 @@ export const FitModel = {
   PROPORTIONAL: "proportional",
   LINEAR: "linear",
   QUADRATIC: "quadratic",
+  CUBIC: "cubic",
+  INVERSE: "inverse",
+  INVERSE_SQUARE: "inverseSquare",
 } as const;
 
 export type FitModelValue = (typeof FitModel)[keyof typeof FitModel];
@@ -29,6 +31,9 @@ export const MODEL_POWERS: Record<FitModelValue, readonly number[]> = {
   proportional: [1],
   linear: [1, 0],
   quadratic: [2, 1, 0],
+  cubic: [3, 2, 1, 0],
+  inverse: [-1, 0],
+  inverseSquare: [-2, 0],
 };
 
 export const FitFailureReason = {
@@ -38,6 +43,7 @@ export const FitFailureReason = {
   TOO_FEW_DISTINCT_X: "tooFewDistinctX",
   /** Proportional fit where every x is zero. */
   ALL_X_ZERO: "allXZero",
+  UNSUPPORTED_X: "unsupportedX",
 } as const;
 
 export type FitFailureReasonValue = (typeof FitFailureReason)[keyof typeof FitFailureReason];
@@ -84,8 +90,20 @@ function binomial(n: number, k: number): number {
   return result;
 }
 
+/** Reciprocal models are linear in x raised to their leading power. */
+export function usesReciprocalX(model: FitModelValue): boolean {
+  return (MODEL_POWERS[model][0] as number) < 0;
+}
+
+export function supportsFitX(model: FitModelValue, x: number): boolean {
+  return !usesReciprocalX(model) || Number.isFinite(x ** (MODEL_POWERS[model][0] as number));
+}
+
 /** Evaluates a fitted model at x. */
 export function evaluateFit(model: FitModelValue, parameters: readonly number[], x: number): number {
+  if (!supportsFitX(model, x)) {
+    return Number.NaN;
+  }
   const powers = MODEL_POWERS[model];
   let y = 0;
   for (let j = 0; j < powers.length; j++) {
@@ -230,12 +248,17 @@ function standardErrorsOf(transform: number[][], r: number[][], p: number, varia
  */
 export function fitModel(model: FitModelValue, xs: readonly number[], ys: readonly number[]): FitResult {
   const n = Math.min(xs.length, ys.length);
-  const powers = MODEL_POWERS[model];
+  const reciprocal = usesReciprocalX(model);
+  const powers = reciprocal ? MODEL_POWERS.linear : MODEL_POWERS[model];
+  const predictors = reciprocal ? xs.slice(0, n).map((x) => x ** (MODEL_POWERS[model][0] as number)) : xs;
   const p = powers.length;
   const hasIntercept = powers.includes(0);
   const fail = (reason: FitFailureReasonValue): FitFailure => ({ ok: false, model, reason, required: p, count: n });
 
-  const obstacle = unsolvableReason(xs, n, p, hasIntercept);
+  if (reciprocal && predictors.some((x) => !Number.isFinite(x))) {
+    return fail(FitFailureReason.UNSUPPORTED_X);
+  }
+  const obstacle = unsolvableReason(predictors, n, p, hasIntercept);
   if (obstacle !== null) {
     return fail(obstacle);
   }
@@ -244,18 +267,18 @@ export function fitModel(model: FitModelValue, xs: readonly number[], ys: readon
   let centre = 0;
   if (hasIntercept) {
     for (let i = 0; i < n; i++) {
-      centre += (xs[i] as number) / n;
+      centre += (predictors[i] as number) / n;
     }
   }
   let scale = 0;
   for (let i = 0; i < n; i++) {
-    scale = Math.max(scale, Math.abs((xs[i] as number) - centre));
+    scale = Math.max(scale, Math.abs((predictors[i] as number) - centre));
   }
 
   const design: number[][] = [];
   const rhs: number[] = [];
   for (let i = 0; i < n; i++) {
-    const t = ((xs[i] as number) - centre) / scale;
+    const t = ((predictors[i] as number) - centre) / scale;
     design.push(powers.map((power) => t ** power));
     rhs.push(ys[i] as number);
   }
