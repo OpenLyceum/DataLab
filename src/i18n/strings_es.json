@@ -26,6 +26,7 @@
     "autoScale": "Escala automática",
     "residuals": "Residuos",
     "results": "Resultados del ajuste",
+    "exclude": "Excluir",
     "inFit": "En el ajuste",
     "row": "Fila",
     "pointsUsed": "Puntos usados: {{count}}",
@@ -43,7 +44,7 @@
     "importFailed": "No se encontró ninguna tabla en ese texto.",
     "pasteHint": "Copia celdas en una hoja de cálculo y pulsa Ctrl+V aquí.",
     "copied": "Resultados copiados.",
-    "localOnly": "Tus datos no salen de este navegador.",
+    "localOnly": "Los cambios se guardan en este navegador si el almacenamiento está disponible.",
     "dragHint": "Arrastra sobre la gráfica para seleccionar un intervalo. Desplaza la rueda o pellizca para ampliar; arrastra un eje para desplazar."
   },
   "a11y": {
@@ -66,6 +67,7 @@
         "xColumn": "Columna en el eje x",
         "yColumn": "Columna en el eje y",
         "columnHeader": "Nombre y unidad de la columna {{position}}",
+        "excludeRow": "Excluir la fila {{row}} del ajuste",
         "deleteRow": "Eliminar fila {{row}}",
         "deleteColumn": "Eliminar columna {{position}}",
         "cell": "{{column}}, fila {{row}}"

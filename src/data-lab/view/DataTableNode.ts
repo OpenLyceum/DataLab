@@ -24,13 +24,14 @@ import type { DataLabModel } from "../model/DataLabModel.js";
 import { fillPattern } from "./fillPattern.js";
 
 const FONT = "12px Arial, sans-serif";
-const MIN_CELL_WIDTH = 86;
+const MIN_CELL_WIDTH = 68;
 
 /** Room kept for the vertical scrollbar when sizing columns to fill the table. */
 const SCROLLBAR_ALLOWANCE = 18;
 const MARKER_WIDTH = 22;
 const ROW_NUMBER_WIDTH = 30;
 const REMOVE_BUTTON_WIDTH = 23;
+const EXCLUSION_WIDTH = 48;
 const CELL_PADDING = "3px 5px";
 const CHECK_MARK = "✓";
 
@@ -68,6 +69,7 @@ export class DataTableNode extends Node {
     let cellInputs: HTMLInputElement[][] = [];
     let rows: HTMLTableRowElement[] = [];
     let markers: HTMLTableCellElement[] = [];
+    let exclusionInputs: HTMLInputElement[] = [];
 
     const css = () => ({
       header: DataLabColors.tableHeaderBackgroundColorProperty.value.toCSS(),
@@ -111,7 +113,8 @@ export class DataTableNode extends Node {
     const build = (dataset: Dataset) => {
       const colors = css();
       const rowCount = Math.min(dataset.rowCount, MAX_RENDERED_ROWS);
-      const available = options.width - MARKER_WIDTH - ROW_NUMBER_WIDTH - REMOVE_BUTTON_WIDTH - SCROLLBAR_ALLOWANCE;
+      const available =
+        options.width - MARKER_WIDTH - ROW_NUMBER_WIDTH - REMOVE_BUTTON_WIDTH - EXCLUSION_WIDTH - SCROLLBAR_ALLOWANCE;
       cellWidth = Math.max(
         MIN_CELL_WIDTH,
         Math.floor(available / Math.max(dataset.columns.length, 1)) - REMOVE_BUTTON_WIDTH,
@@ -124,6 +127,7 @@ export class DataTableNode extends Node {
       cellInputs = [];
       rows = [];
       markers = [];
+      exclusionInputs = [];
 
       const headerCellStyle = `position: sticky; top: 0; z-index: 1; background: ${colors.header}; color: ${colors.text}; border: 1px solid ${colors.grid}; padding: 0; font-weight: bold;`;
       const headerRow = document.createElement("tr");
@@ -143,7 +147,11 @@ export class DataTableNode extends Node {
       actionsHeader.scope = "col";
       actionsHeader.style.cssText = headerCellStyle;
       actionsHeader.setAttribute("aria-label", labels.deleteRowStringProperty.value);
-      headerRow.append(markerHeader, numberHeader, actionsHeader);
+      const exclusionHeader = document.createElement("th");
+      exclusionHeader.scope = "col";
+      exclusionHeader.style.cssText = `${headerCellStyle} min-width: ${EXCLUSION_WIDTH}px;`;
+      exclusionHeader.textContent = labels.excludeStringProperty.value;
+      headerRow.append(markerHeader, numberHeader, actionsHeader, exclusionHeader);
 
       dataset.columns.forEach((_column, c) => {
         const th = document.createElement("th");
@@ -202,7 +210,15 @@ export class DataTableNode extends Node {
             }
           }),
         );
-        tr.append(marker, number, actions);
+        const exclusion = document.createElement("td");
+        exclusion.style.cssText = `${cellStyle} text-align: center;`;
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.setAttribute("aria-label", fillPattern(a11y.controls.excludeRowStringProperty.value, { row: r + 1 }));
+        checkbox.addEventListener("change", () => model.setRowExcluded(r, checkbox.checked));
+        exclusion.appendChild(checkbox);
+        exclusionInputs.push(checkbox);
+        tr.append(marker, number, actions, exclusion);
         const rowInputs: HTMLInputElement[] = [];
         dataset.columns.forEach((_column, c) => {
           const td = document.createElement("td");
@@ -251,6 +267,10 @@ export class DataTableNode extends Node {
     /** Writes the model's text into the inputs, leaving the one being typed in alone. */
     const fill = (dataset: Dataset) => {
       const colors = css();
+      const excluded = new Set(dataset.excludedRows);
+      exclusionInputs.forEach((input, index) => {
+        input.checked = excluded.has(index);
+      });
       caption.textContent = a11y.controls.dataTableStringProperty.value;
       dataset.columns.forEach((column, c) => {
         const header = headerInputs[c];
@@ -321,6 +341,8 @@ export class DataTableNode extends Node {
         a11y.controls.deleteColumnStringProperty,
         a11y.controls.deleteRowStringProperty,
         labels.deleteRowStringProperty,
+        labels.excludeStringProperty,
+        a11y.controls.excludeRowStringProperty,
       ],
       rebuild,
     );

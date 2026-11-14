@@ -5,12 +5,12 @@
 Plot and analyze your own lab data in the browser. Import a CSV or paste a table,
 choose the x and y columns, drag across the graph to select a range, fit a model to
 the points in that range, and read the parameters, their uncertainties and the
-residuals. Nothing is uploaded: the data stays in the page.
+residuals. Data stays in the browser. The last edited table is restored on reload when browser storage is available.
 
 ## Features
 
 - Import a CSV file (picker or drag-and-drop) or paste cells from a spreadsheet; comma, tab and semicolon delimiters, decimal commas, units read from headers such as `Time (s)`
-- Editable data table with row and column controls; rows used by the fit are marked
+- Editable data table with row and column controls; rows used by the fit are marked, and individual rows can be excluded
 - Select a range of x by dragging on the graph, moving its edges with the pointer or keyboard, or typing the bounds
 - Proportional, linear and quadratic least-squares fits with parameter uncertainties, units, RMSE and R²
 - Residual graph on the same x axis

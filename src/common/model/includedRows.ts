@@ -4,7 +4,8 @@
  * Decides which rows a fit uses. Pure, no SceneryStack imports.
  *
  * A row is included when its x and y are both numbers and its x lies in the
- * selected range, bounds included. With no range every valid row is included.
+ * selected range, bounds included, unless excluded manually. With no range every
+ * valid, non-excluded row is included.
  * Rows need not be sorted by x, so the result is a list of row indices rather
  * than a first and last row.
  */
@@ -31,7 +32,13 @@ export function orderedRange(a: number, b: number): XRange {
   return a <= b ? { min: a, max: b } : { min: b, max: a };
 }
 
-export function includedRows(xs: readonly number[], ys: readonly number[], range: XRange | null): Inclusion {
+export function includedRows(
+  xs: readonly number[],
+  ys: readonly number[],
+  range: XRange | null,
+  excludedRows: readonly number[] = [],
+): Inclusion {
+  const excluded = new Set(excludedRows);
   const rowCount = Math.min(xs.length, ys.length);
   const indices: number[] = [];
   const flags: boolean[] = new Array<boolean>(rowCount).fill(false);
@@ -41,7 +48,7 @@ export function includedRows(xs: readonly number[], ys: readonly number[], range
     const y = ys[i] as number;
     if (!(Number.isFinite(x) && Number.isFinite(y))) {
       skippedCount++;
-    } else if (range === null || (x >= range.min && x <= range.max)) {
+    } else if (!excluded.has(i) && (range === null || (x >= range.min && x <= range.max))) {
       indices.push(i);
       flags[i] = true;
     }

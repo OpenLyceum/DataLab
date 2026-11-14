@@ -26,6 +26,7 @@
     "autoScale": "Auto scale",
     "residuals": "Residuals",
     "results": "Fit results",
+    "exclude": "Exclude",
     "inFit": "In fit",
     "row": "Row",
     "pointsUsed": "Points used: {{count}}",
@@ -43,7 +44,7 @@
     "importFailed": "No table found in that text.",
     "pasteHint": "Copy cells in a spreadsheet, then press Ctrl+V here.",
     "copied": "Results copied.",
-    "localOnly": "Your data stays in this browser.",
+    "localOnly": "Edits are saved in this browser when storage is available.",
     "dragHint": "Drag across the graph to select a range. Scroll or pinch to zoom; drag an axis to pan."
   },
   "a11y": {
@@ -66,6 +67,7 @@
         "xColumn": "Column on the x axis",
         "yColumn": "Column on the y axis",
         "columnHeader": "Name and unit of column {{position}}",
+        "excludeRow": "Exclude row {{row}} from fit",
         "deleteRow": "Delete row {{row}}",
         "deleteColumn": "Delete column {{position}}",
         "cell": "{{column}}, row {{row}}"

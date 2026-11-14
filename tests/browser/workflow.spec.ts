@@ -326,7 +326,7 @@ test("table structure edits keep the fit tied to the surviving columns", async (
   await expect(page.getByLabel("Range maximum")).toHaveValue("");
   await expect(page.getByLabel("Delete column 1", { exact: true })).toBeDisabled();
 
-  const cell = page.locator("tbody tr").first().locator("input");
+  const cell = page.locator("tbody tr").first().locator("input[type=text]");
   await cell.fill("2");
   await cell.press("Enter");
   await expect(page.getByLabel("Column on the x axis")).toHaveValue("0");
@@ -371,4 +371,32 @@ test("graph export downloads an opaque PNG with axes and data", async ({ page })
   expect(image.height).toBeGreaterThan(380);
   expect(image.opaqueCorner).toBe(true);
   expect(image.hasDataPoint).toBe(true);
+});
+
+test("a manually excluded point stays out of the fit after editing and reload", async ({ page }) => {
+  await open(page);
+  await setRange(page, "1.5", "3");
+  const excluded = page.getByLabel("Exclude row 31 from fit", { exact: true });
+  await excluded.check();
+  expect(await includedRowCount(page)).toBe(30);
+  expect(await copiedResults(page)).toContain("Points used: 30");
+
+  await page.getByLabel("Delete row 1", { exact: true }).click();
+  const shifted = page.getByLabel("Exclude row 30 from fit", { exact: true });
+  await expect(shifted).toBeChecked();
+  const cell = page.getByLabel("Position (m), row 30", { exact: true });
+  await cell.fill("1,23");
+  await cell.press("Enter");
+
+  await open(page);
+  await expect(shifted).toBeChecked();
+  await expect(cell).toHaveValue("1,23");
+  expect(await includedRowCount(page)).toBe(59);
+
+  const [download] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
+  const exported = readFileSync(await download.path(), "utf8").split("\n");
+  expect(exported[30]).toMatch(/^1\.5,1\.23,0,[^,]+,$/);
+
+  await shifted.uncheck();
+  expect(await includedRowCount(page)).toBe(60);
 });

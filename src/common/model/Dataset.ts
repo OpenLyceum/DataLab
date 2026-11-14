@@ -21,6 +21,8 @@ export type Column = {
 export type Dataset = {
   readonly columns: readonly Column[];
   readonly rowCount: number;
+  /** Manually excluded row indices, independent of the selected fit range. */
+  readonly excludedRows?: readonly number[];
 };
 
 export const EMPTY_DATASET: Dataset = { columns: [], rowCount: 0 };
@@ -77,9 +79,26 @@ export function setColumnHeader(dataset: Dataset, columnIndex: number, name: str
   return column ? replaceColumn(dataset, columnIndex, { ...column, name, unit }) : dataset;
 }
 
+export function setRowExcluded(dataset: Dataset, rowIndex: number, excluded: boolean): Dataset {
+  const current = dataset.excludedRows ?? [];
+  if (
+    !Number.isInteger(rowIndex) ||
+    rowIndex < 0 ||
+    rowIndex >= dataset.rowCount ||
+    current.includes(rowIndex) === excluded
+  ) {
+    return dataset;
+  }
+  return {
+    ...dataset,
+    excludedRows: excluded ? [...current, rowIndex] : current.filter((row) => row !== rowIndex),
+  };
+}
+
 /** Appends one blank row. */
 export function addRow(dataset: Dataset): Dataset {
   return {
+    ...dataset,
     rowCount: dataset.rowCount + 1,
     columns: dataset.columns.map((column) => ({
       ...column,
@@ -95,6 +114,9 @@ export function deleteRow(dataset: Dataset, rowIndex: number): Dataset {
   }
   return {
     rowCount: dataset.rowCount - 1,
+    excludedRows: (dataset.excludedRows ?? [])
+      .filter((row) => row !== rowIndex)
+      .map((row) => (row > rowIndex ? row - 1 : row)),
     columns: dataset.columns.map((column) => ({
       ...column,
       texts: column.texts.filter((_, i) => i !== rowIndex),
@@ -148,5 +170,5 @@ export function pasteBlock(
     });
     return changed ? { ...column, texts, values } : column;
   });
-  return { rowCount: result.rowCount, columns };
+  return { ...result, columns };
 }

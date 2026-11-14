@@ -26,6 +26,7 @@
     "autoScale": "Échelle automatique",
     "residuals": "Résidus",
     "results": "Résultats de l'ajustement",
+    "exclude": "Exclure",
     "inFit": "Dans l'ajustement",
     "row": "Ligne",
     "pointsUsed": "Points utilisés : {{count}}",
@@ -43,7 +44,7 @@
     "importFailed": "Aucun tableau trouvé dans ce texte.",
     "pasteHint": "Copiez des cellules dans un tableur, puis appuyez sur Ctrl+V ici.",
     "copied": "Résultats copiés.",
-    "localOnly": "Vos données restent dans ce navigateur.",
+    "localOnly": "Les modifications sont enregistrées dans ce navigateur si le stockage est disponible.",
     "dragHint": "Faites glisser sur le graphique pour sélectionner un intervalle. Molette ou pincement pour zoomer ; faites glisser un axe pour déplacer."
   },
   "a11y": {
@@ -66,6 +67,7 @@
         "xColumn": "Colonne sur l'axe x",
         "yColumn": "Colonne sur l'axe y",
         "columnHeader": "Nom et unité de la colonne {{position}}",
+        "excludeRow": "Exclure la ligne {{row}} de l’ajustement",
         "deleteRow": "Supprimer la ligne {{row}}",
         "deleteColumn": "Supprimer la colonne {{position}}",
         "cell": "{{column}}, ligne {{row}}"

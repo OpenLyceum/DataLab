@@ -99,9 +99,14 @@ Remaining for 0.1:
 - Check the table in Firefox, Safari, on an iPad and with a screen reader
   (only Chromium has been exercised).
 
-0.2: weighted fits, error bars and reduced χ²; calculated columns; per-row
-exclusion; pinned fits (two ranges at once); inverse, inverse-square and cubic
-models; log axes; restore the table after a reload.
+Done for 0.2: per-row exclusion from fits and local table recovery after a
+reload. Exclusions survive table edits and reloads, and are reflected in the
+graph, fit, residuals and CSV export. Recovery includes committed cells, headers
+and exclusions. The fit range and zoom start at their defaults on reload.
+
+Remaining for 0.2: weighted fits, error bars and reduced χ²; calculated columns;
+pinned fits (two ranges at once); inverse, inverse-square and cubic models;
+log axes.
 
 0.3: nonlinear models (Levenberg–Marquardt); multiple runs; session files;
 statistics, slope and area on a range.

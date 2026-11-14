@@ -23,10 +23,12 @@ import {
   pasteBlock,
   setCell,
   setColumnHeader,
+  setRowExcluded,
 } from "../../common/model/Dataset.js";
 import { type Inclusion, includedRows, orderedRange, type XRange } from "../../common/model/includedRows.js";
 import { FitModel, type FitModelValue, type FitResult, fitModel } from "../../common/model/leastSquares.js";
 import { parseTable } from "../../common/model/parseTable.js";
+import { restoreDataset, saveDataset } from "./datasetStorage.js";
 import sampleCsv from "./samples/cart-ramp-then-level.csv?raw";
 
 export class DataLabModel implements TModel {
@@ -49,16 +51,22 @@ export class DataLabModel implements TModel {
   private reindexingXAxis = false;
 
   public constructor() {
-    this.datasetProperty = new Property<Dataset>(parseTable(sampleCsv).dataset);
+    this.datasetProperty = new Property<Dataset>(restoreDataset() ?? parseTable(sampleCsv).dataset);
     this.chooseDefaultColumns();
 
     const columnAt = (dataset: Dataset, index: number): Column | null => dataset.columns[index] ?? null;
     this.xColumnProperty = new DerivedProperty([this.datasetProperty, this.xColumnIndexProperty], columnAt);
     this.yColumnProperty = new DerivedProperty([this.datasetProperty, this.yColumnIndexProperty], columnAt);
 
+    const noExclusions: readonly number[] = [];
+    const excludedRowsProperty = new DerivedProperty(
+      [this.datasetProperty],
+      (dataset) => dataset.excludedRows ?? noExclusions,
+    );
     this.inclusionProperty = new DerivedProperty(
-      [this.xColumnProperty, this.yColumnProperty, this.rangeProperty],
-      (xColumn, yColumn, range) => includedRows(xColumn?.values ?? [], yColumn?.values ?? [], range),
+      [this.xColumnProperty, this.yColumnProperty, this.rangeProperty, excludedRowsProperty],
+      (xColumn, yColumn, range, excludedRows) =>
+        includedRows(xColumn?.values ?? [], yColumn?.values ?? [], range, excludedRows),
     );
 
     this.fitProperty = new DerivedProperty(
@@ -73,6 +81,8 @@ export class DataLabModel implements TModel {
         );
       },
     );
+
+    this.datasetProperty.lazyLink(saveDataset);
 
     // A range is in the units of the x column, so it does not survive a change of x column.
     this.xColumnIndexProperty.lazyLink(() => {
@@ -108,6 +118,10 @@ export class DataLabModel implements TModel {
 
   public pasteBlock(rowIndex: number, columnIndex: number, block: readonly (readonly string[])[]): void {
     this.updateDataset(pasteBlock(this.datasetProperty.value, rowIndex, columnIndex, block));
+  }
+
+  public setRowExcluded(rowIndex: number, excluded: boolean): void {
+    this.datasetProperty.value = setRowExcluded(this.datasetProperty.value, rowIndex, excluded);
   }
 
   public addRow(): void {
