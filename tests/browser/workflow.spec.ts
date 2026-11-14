@@ -425,7 +425,7 @@ test("inverse fits skip zero and leave its prediction blank in CSV", async ({ pa
   await expect(page.getByRole("status")).toContainText("1 skipped (undefined reciprocal x)");
   expect(await includedRowCount(page)).toBe(5);
   const summary = await copiedResults(page);
-  expect(summary).toContain("y = A/x + B");
+  expect(summary).toContain("Signal = A/Distance + B");
   expect(parameter(summary, "A")).toBeCloseTo(4);
   expect(summary).toMatch(/^A = .* V·m$/m);
   const [download] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
@@ -590,7 +590,7 @@ test("exponential fits use original measurements and export their predictions", 
   });
   await selectFitModel(page, "Exponential");
   const summary = await copiedResults(page);
-  expect(summary).toContain("Exponential: y = A·exp(k·(x − x₀))");
+  expect(summary).toContain("Exponential: Signal = A·exp(k·(Time − x₀))");
   expect(summary).toMatch(/^k = .* 1\/s$/m);
   expect(summary).toContain("Points used: 5");
   const [download] = await Promise.all([page.waitForEvent("download"), pressButton(page, "Export CSV")]);
@@ -599,6 +599,25 @@ test("exponential fits use original measurements and export their predictions", 
     ?.split(",");
   expect(Number(row?.[3])).toBeCloseTo(4 * Math.exp(-1), 10);
   expect(Number(row?.[4])).toBeCloseTo(0, 10);
+});
+
+test("the fit menu reaches the sine series and reports all three harmonics", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    const rows = Array.from({ length: 48 }, (_, i) => {
+      const t = i * 0.125;
+      return `${t},${2 * Math.sin(2.5 * t + 0.4) + 0.5 * Math.sin(5 * t - 0.7) + 0.3 * Math.sin(7.5 * t + 1) + 0.25}`;
+    });
+    data.setData("text/plain", ["Elapsed time (s),Voltage (V)", ...rows].join("\n"));
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+  await selectFitModel(page, "Sine series");
+  const summary = await copiedResults(page);
+  expect(summary).toContain("Sine series: Voltage = A₁·sin(ω·[Elapsed time] + φ₁)");
+  expect(summary).toContain("Points used: 48");
+  expect(summary).toMatch(/^ω = .* rad\/s$/m);
+  expect(parameter(summary, "A₃")).toBeCloseTo(0.3, 4);
 });
 
 test("named runs keep separate data and analysis and round-trip together", async ({ page }) => {

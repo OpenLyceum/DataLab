@@ -15,7 +15,7 @@ residuals. Data stays in the browser. The last edited table is restored on reloa
 - Capture Smart Cart position over Web Bluetooth in a compatible browser and save it as a new run
 - Select a rectangle to constrain both x and y, or enter the bounds directly
 - Select a range of x by dragging on the graph, moving its edges with the pointer or keyboard, or typing the bounds
-- Proportional, linear, quadratic, cubic, inverse, inverse-square, and exponential least-squares fits with parameter uncertainties, units, RMSE and R²
+- 20 least-squares fit models, including polynomials through degree four, free-exponent power laws, shifted reciprocals, exponentials, logarithms, sine and damped sine, a three-harmonic sine series, and Gaussian fits
 - Optional y-uncertainty column for weighted fits, vertical error bars, and reduced χ²
 - Pin a fit to compare its curve and results with a second range or model
 - Switch between named runs with independent data and analysis settings, and save them together in a session file

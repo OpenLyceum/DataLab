@@ -6,31 +6,108 @@
  * SceneryStack imports.
  */
 
-import { FitModel, type FitModelValue } from "./leastSquares.js";
+import { FitModel, type FitModelValue, MODEL_POWERS } from "./leastSquares.js";
 
 /** Parameter symbols, in the order the fit reports its parameters. */
 export const MODEL_SYMBOLS: Record<FitModelValue, readonly string[]> = {
   proportional: ["A"],
   linear: ["m", "b"],
+  weightedLinear: ["m", "b"],
   quadratic: ["A", "B", "C"],
   cubic: ["A", "B", "C", "D"],
+  quartic: ["A", "B", "C", "D", "E"],
+  power: ["A", "n", "B"],
+  powerNoOffset: ["A", "n"],
   inverse: ["A", "B"],
+  shiftedInverse: ["A", "x₀", "B"],
   inverseSquare: ["A", "B"],
+  shiftedInverseSquare: ["A", "x₀", "B"],
   exponential: ["A", "k", "x₀"],
+  exponentialBackground: ["A", "k", "y₀"],
+  inverseExponential: ["A", "k", "y₀"],
+  logarithmic: ["A", "B"],
+  sine: ["A", "ω", "φ", "C"],
+  dampedSine: ["A", "k", "ω", "φ", "C"],
+  sineSeries: ["ω", "A₁", "φ₁", "A₂", "φ₂", "A₃", "φ₃", "C"],
+  gaussian: ["A", "μ", "σ", "y₀"],
 };
 
-/** The model written out. Mathematical notation, the same in every language. */
-export const MODEL_EQUATIONS: Record<FitModelValue, string> = {
+const MODEL_EQUATIONS: Record<FitModelValue, string> = {
   proportional: "y = A·x",
   linear: "y = m·x + b",
+  weightedLinear: "y = m·x + b",
   quadratic: "y = A·x² + B·x + C",
   cubic: "y = A·x³ + B·x² + C·x + D",
+  quartic: "y = A·x⁴ + B·x³ + C·x² + D·x + E",
+  power: "y = A·x^n + B",
+  powerNoOffset: "y = A·x^n",
   inverse: "y = A/x + B",
+  shiftedInverse: "y = A/(x − x₀) + B",
   inverseSquare: "y = A/x² + B",
+  shiftedInverseSquare: "y = A/(x − x₀)² + B",
   exponential: "y = A·exp(k·(x − x₀))",
+  exponentialBackground: "y = A·exp(k·x) + y₀",
+  inverseExponential: "y = A·(1 − exp(−k·x)) + y₀",
+  logarithmic: "y = A·ln(x) + B",
+  sine: "y = A·sin(ω·x + φ) + C",
+  dampedSine: "y = A·exp(−k·x)·sin(ω·x + φ) + C",
+  sineSeries: "y = A₁·sin(ω·x + φ₁) + A₂·sin(2ω·x + φ₂) + A₃·sin(3ω·x + φ₃) + C",
+  gaussian: "y = A·exp(−½·((x − μ)/σ)²) + y₀",
 };
 
+export function fitEquation(model: FitModelValue, xName = "x", yName = "y"): string {
+  const x = /^\p{L}[\p{L}\p{N}_]*$/u.test(xName) ? xName : `[${xName}]`;
+  return MODEL_EQUATIONS[model].replace(/\b[xy]\b(?![₀])/g, (symbol) => (symbol === "x" ? x : yName));
+}
+
 export const FIT_MODELS: readonly FitModelValue[] = Object.values(FitModel);
+
+/** Powers of x in the units of nonlinear coefficients, with y units specified independently. */
+const CURVE_UNITS: Partial<Record<FitModelValue, readonly string[]>> = {
+  power: ["power", "", "y"],
+  powerNoOffset: ["power", ""],
+  shiftedInverse: ["yx", "x", "y"],
+  shiftedInverseSquare: ["yxx", "x", "y"],
+  exponential: ["y", "rate", "x"],
+  exponentialBackground: ["y", "rate", "y"],
+  inverseExponential: ["y", "rate", "y"],
+  logarithmic: ["y", "y"],
+  sine: ["y", "angularRate", "rad", "y"],
+  dampedSine: ["y", "rate", "angularRate", "rad", "y"],
+  sineSeries: ["angularRate", "y", "rad", "y", "rad", "y", "rad", "y"],
+  gaussian: ["y", "x", "x", "y"],
+};
+
+export function fitParameterUnit(model: FitModelValue, index: number, xUnit: string, yUnit: string): string {
+  const kind = CURVE_UNITS[model]?.[index];
+  switch (kind) {
+    case "x":
+      return xUnit;
+    case "y":
+      return yUnit;
+    case "yx":
+      return parameterUnit(xUnit, yUnit, -1);
+    case "yxx":
+      return parameterUnit(xUnit, yUnit, -2);
+    case "rate":
+      return parameterUnit(xUnit, "", 1);
+    case "angularRate":
+      return parameterUnit(xUnit, "rad", 1);
+    case "rad":
+      return "rad";
+    case "power": {
+      const numerator = yUnit === "" ? "1" : needsParentheses(yUnit) ? `(${yUnit})` : yUnit;
+      const denominator = needsParentheses(xUnit) ? `(${xUnit})` : xUnit;
+      return xUnit === "" ? yUnit : `${numerator}/${denominator}^n`;
+    }
+    case "":
+      return "";
+    default: {
+      const powers = MODEL_POWERS as Partial<Record<FitModelValue, readonly number[]>>;
+      return parameterUnit(xUnit, yUnit, powers[model]?.[index] ?? 0);
+    }
+  }
+}
 
 /** Significant figures kept in an uncertainty, and so in the value it belongs to. */
 const UNCERTAINTY_DIGITS = 2;
