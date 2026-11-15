@@ -46,15 +46,6 @@ const stringProperties = LocalizedString.getNestedStringProperties({
 });
 
 /**
- * Explicit Preferences → Simulation labels from {@link StringManager.getPreferences}.
- * Same sync rule as {@link DataLabA11yStrings}.
- */
-export type DataLabPreferenceStrings = {
-  readonly titleStringProperty: ReadOnlyProperty<string>;
-  readonly showResidualsStringProperty: ReadOnlyProperty<string>;
-};
-
-/**
  * StringManager is a singleton that provides typed access to all localized
  * strings. Use `StringManager.getInstance()` everywhere — never construct it
  * directly.

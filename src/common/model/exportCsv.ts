@@ -14,9 +14,9 @@ import { columnLabel, type Dataset } from "./Dataset.js";
 import type { Inclusion } from "./includedRows.js";
 import { evaluateFit, type FitResult, supportsFitX } from "./leastSquares.js";
 
-export const IN_FIT_HEADER = "in_fit";
-export const FIT_VALUE_HEADER = "fit_value";
-export const RESIDUAL_HEADER = "residual";
+const IN_FIT_HEADER = "in_fit";
+const FIT_VALUE_HEADER = "fit_value";
+const RESIDUAL_HEADER = "residual";
 
 function quote(field: string): string {
   return /[",\n\r]/.test(field) ? `"${field.replace(/"/g, '""')}"` : field;

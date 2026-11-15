@@ -24,7 +24,7 @@ function formatLogTick(coordinate: number, step: number): string {
 }
 
 /** A "nice" tick spacing (1, 2 or 5 × 10ⁿ) giving about `targetTicks` ticks across `span`. */
-export function niceStep(span: number, targetTicks: number = CHART_TICKS.DEFAULT_DIVISIONS): number {
+function niceStep(span: number, targetTicks: number = CHART_TICKS.DEFAULT_DIVISIONS): number {
   if (!(span > 0 && Number.isFinite(span))) {
     return 1;
   }
@@ -43,7 +43,7 @@ export function niceStep(span: number, targetTicks: number = CHART_TICKS.DEFAULT
 }
 
 /** Decimals needed to print multiples of `step` exactly. */
-export function decimalsFor(step: number): number {
+function decimalsFor(step: number): number {
   return Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
 }
 

@@ -28,8 +28,6 @@ export type Dataset = {
   readonly excludedRows?: readonly number[];
 };
 
-export const EMPTY_DATASET: Dataset = { columns: [], rowCount: 0 };
-
 const NUMBER_PATTERN = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 const DECIMAL_COMMA_PATTERN = /^[+-]?(\d+,?\d*|,\d+)([eE][+-]?\d+)?$/;
 

@@ -16,7 +16,6 @@
  *
  */
 
-import { Dimension2 } from "scenerystack/dot";
 import { PhetFont } from "scenerystack/scenery-phet";
 import DataLabNamespace from "./DataLabNamespace.js";
 
@@ -32,7 +31,7 @@ export const PANEL_CORNER_RADIUS = 6;
 export const COLUMN_SPACING = 10;
 
 /** Font size of buttons, labels and HTML form controls. */
-export const CONTROL_FONT_SIZE = 12;
+const CONTROL_FONT_SIZE = 12;
 
 // ── Data table (left column) ──────────────────────────────────────────────────
 
@@ -93,19 +92,6 @@ export const PANEL = {
   Y_MARGIN: 10,
   /** Extra width beyond content so the panel does not hug the text. */
   CONTENT_WIDTH_INSET: 24,
-} as const;
-
-/** Shared control dimensions and spacing (px); arrow-button scale is dimensionless. */
-export const CONTROLS = {
-  THUMB_SIZE: new Dimension2(12, 22),
-  STANDALONE_TRACK_SIZE: new Dimension2(150, 3),
-  NUMBER_CONTROL_TRACK_SIZE: new Dimension2(110, 3),
-  CHECKBOX_BOX_WIDTH: 16,
-  CHECKBOX_SPACING: 4,
-  SLIDER_PADDING: 4,
-  ARROW_BUTTON_SPACING: 3,
-  VERTICAL_SPACING: 4,
-  ARROW_BUTTON_SCALE: 0.75,
 } as const;
 
 /** Screen-layout spacings and button chrome (px). */
@@ -342,7 +328,6 @@ DataLabNamespace.register("DataLabConstants", {
   FONTS,
   HTML_CONTROL_FONT,
   PANEL,
-  CONTROLS,
   LAYOUT,
   PREFERENCES_LAYOUT,
   SCREEN_ICONS,

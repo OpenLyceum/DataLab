@@ -70,7 +70,7 @@ export const FitFailureReason = {
   UNSUPPORTED_X: "unsupportedX",
 } as const;
 
-export type FitFailureReasonValue = (typeof FitFailureReason)[keyof typeof FitFailureReason];
+type FitFailureReasonValue = (typeof FitFailureReason)[keyof typeof FitFailureReason];
 
 export type FitSuccess = {
   readonly ok: true;

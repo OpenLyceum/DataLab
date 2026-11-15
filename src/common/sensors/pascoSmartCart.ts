@@ -36,7 +36,7 @@ export function canCapturePasco(): boolean {
   return typeof bluetooth()?.requestDevice === "function";
 }
 
-export function decodePositionDelta(value: DataView): number | null {
+function decodePositionDelta(value: DataView): number | null {
   if (value.byteLength < 3 || value.getUint8(0) !== 0xc0 || value.getUint8(2) !== 5) {
     return null;
   }

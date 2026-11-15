@@ -1,7 +1,7 @@
 import { PROFILED_FIT } from "../../DataLabConstants.js";
 import { backSubstitute, householder, isRankDeficient, standardErrorsOf } from "./qr.js";
 
-export type Basis = (x: number, shape: readonly number[]) => readonly number[];
+type Basis = (x: number, shape: readonly number[]) => readonly number[];
 export type Profile = {
   readonly basis: Basis;
   readonly bounds: readonly (readonly [number, number])[];

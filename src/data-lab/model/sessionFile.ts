@@ -4,8 +4,6 @@ import { FitModel, type FitModelValue } from "../../common/model/leastSquares.js
 import { SESSION } from "../../DataLabConstants.js";
 import { decodeDataset } from "./datasetStorage.js";
 
-export { SESSION_FILE_NAME } from "../../DataLabConstants.js";
-
 export type FitSettings = {
   readonly uncertaintyColumn: number;
   readonly model: FitModelValue;
