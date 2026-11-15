@@ -52,7 +52,6 @@ export function modelNameProperties(): Record<FitModelValue, TReadOnlyProperty<s
     inverse: labels.inverseStringProperty,
     inverseSquare: labels.inverseSquareStringProperty,
     exponential: labels.exponentialStringProperty,
-    weightedLinear: labels.weightedLinearStringProperty,
     quartic: labels.quarticStringProperty,
     power: labels.powerStringProperty,
     powerNoOffset: labels.powerNoOffsetStringProperty,
@@ -158,15 +157,23 @@ function cautionText(fit: FitSuccess, labels: Labels): string {
     }
     return labels.noScatterStringProperty.value;
   }
-  return fit.degreesOfFreedom < FIT_DISPLAY.CAUTION_DEGREES_OF_FREEDOM ? labels.fewPointsStringProperty.value : "";
+  if (fit.degreesOfFreedom < FIT_DISPLAY.CAUTION_DEGREES_OF_FREEDOM) {
+    return labels.fewPointsStringProperty.value;
+  }
+  // The weighted uncertainties are the supplied σ taken at face value, so a χ² far
+  // from 1 says they should not be.
+  if (fit.reducedChiSquared !== null && fit.reducedChiSquared > FIT_DISPLAY.REDUCED_CHI_SQUARED_HIGH) {
+    return labels.chiSquaredHighStringProperty.value;
+  }
+  if (fit.reducedChiSquared !== null && fit.reducedChiSquared < FIT_DISPLAY.REDUCED_CHI_SQUARED_LOW) {
+    return labels.chiSquaredLowStringProperty.value;
+  }
+  return "";
 }
 
 function failureLine(fit: FitFailure, labels: Labels): string {
   if (fit.reason === FitFailureReason.NONLINEAR_FAILURE) {
     return labels.nonlinearFailureStringProperty.value;
-  }
-  if (fit.reason === FitFailureReason.MISSING_UNCERTAINTY) {
-    return labels.missingUncertaintyStringProperty.value;
   }
   if (fit.reason === FitFailureReason.INVALID_UNCERTAINTY) {
     return fillPattern(labels.statusInvalidUncertaintyStringProperty.value, { count: fit.count });
@@ -190,6 +197,10 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
   return DerivedProperty.deriveAny(
     [
       model.datasetProperty,
+      // The names and units come from the columns, which can change (a column
+      // deleted to their left) without the numbers, and so the fit, changing.
+      model.xColumnProperty,
+      model.yColumnProperty,
       model.inclusionProperty,
       model.fitProperty,
       model.rangeProperty,
@@ -202,7 +213,6 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       labels.reducedChiSquaredStringProperty,
       labels.statusUnsupportedStringProperty,
       labels.statusNonpositiveStringProperty,
-      labels.missingUncertaintyStringProperty,
       labels.pointsUsedStringProperty,
       labels.rmseStringProperty,
       labels.rSquaredStringProperty,
@@ -212,6 +222,8 @@ export function createFitTextProperty(model: DataLabModel): TReadOnlyProperty<Fi
       labels.noScatterStringProperty,
       labels.nonlinearFailureStringProperty,
       labels.fewPointsStringProperty,
+      labels.chiSquaredHighStringProperty,
+      labels.chiSquaredLowStringProperty,
     ],
     (): FitText => {
       const fit = model.fitProperty.value;

@@ -12,6 +12,10 @@
  *
  * Rows the fit uses are tinted and carry a check mark in the first column, so
  * inclusion does not rest on color alone.
+ *
+ * A long table is shown a page of rows at a time, with a line under it saying
+ * which rows are on show; every row is plotted and fitted whether shown or not.
+ * Pressing Enter in the last row adds a row, so a column can be typed in one go.
  */
 
 import { Multilink } from "scenerystack/axon";
@@ -39,18 +43,25 @@ export class DataTableNode extends Node {
     const a11y = StringManager.getInstance().getDataLabA11yStrings();
 
     const wrapper = document.createElement("div");
+    const scroller = document.createElement("div");
+    const pager = document.createElement("div");
+    const pageText = document.createElement("span");
     const table = document.createElement("table");
     const caption = document.createElement("caption");
     const thead = document.createElement("thead");
     const tbody = document.createElement("tbody");
     table.append(caption, thead, tbody);
-    wrapper.appendChild(table);
+    scroller.appendChild(table);
+    wrapper.append(scroller, pager);
     table.style.cssText = `border-collapse: collapse; font: ${TABLE.FONT};`;
     caption.style.cssText =
       "position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;";
 
     let renderedRowCount = -1;
     let renderedColumnCount = -1;
+    /** Index of the first row on show. The arrays of row elements below start there. */
+    let pageStart = 0;
+    let renderedPageStart = -1;
     let formulaButtons = new Map<number, HTMLButtonElement>();
     let removeColumns: HTMLButtonElement[] = [];
     let headerInputs: HTMLInputElement[] = [];
@@ -79,8 +90,17 @@ export class DataTableNode extends Node {
       input.style.cssText = `width: ${cellWidth}px; box-sizing: border-box; border: none; background: transparent; font: ${TABLE.FONT}; padding: ${TABLE.CELL_PADDING}; text-align: ${bold ? "center" : "right"}; ${bold ? "font-weight: bold;" : ""}`;
     };
 
+    const pageOf = (rowIndex: number) => Math.floor(rowIndex / TABLE.ROWS_PER_PAGE) * TABLE.ROWS_PER_PAGE;
+    const showPage = (start: number) => {
+      pageStart = Math.max(0, start);
+      refresh();
+      scroller.scrollTop = 0;
+    };
     const focusCell = (rowIndex: number, columnIndex: number) => {
-      const input = cellInputs[rowIndex]?.[columnIndex];
+      if (pageOf(rowIndex) !== pageStart) {
+        showPage(pageOf(rowIndex));
+      }
+      const input = cellInputs[rowIndex - pageStart]?.[columnIndex];
       if (input) {
         input.focus();
         input.select();
@@ -100,7 +120,7 @@ export class DataTableNode extends Node {
 
     const build = (dataset: Dataset) => {
       const colors = css();
-      const rowCount = Math.min(dataset.rowCount, TABLE.MAX_RENDERED_ROWS);
+      const pageEnd = Math.min(dataset.rowCount, pageStart + TABLE.ROWS_PER_PAGE);
       const available =
         options.width -
         TABLE.MARKER_WIDTH -
@@ -194,7 +214,7 @@ export class DataTableNode extends Node {
       thead.appendChild(headerRow);
 
       const cellStyle = `border: 1px solid ${colors.grid}; padding: 0;`;
-      for (let r = 0; r < rowCount; r++) {
+      for (let r = pageStart; r < pageEnd; r++) {
         const tr = document.createElement("tr");
         const marker = document.createElement("td");
         marker.style.cssText = `${cellStyle} text-align: center; color: ${colors.text};`;
@@ -207,10 +227,11 @@ export class DataTableNode extends Node {
         actions.appendChild(
           removeButton(fillPattern(a11y.controls.deleteRowStringProperty.value, { row: r + 1 }), () => {
             model.deleteRow(r);
-            if (cellInputs.length === 0) {
+            const remaining = model.datasetProperty.value.rowCount;
+            if (remaining === 0) {
               headerInputs[0]?.focus();
             } else {
-              focusCell(Math.min(r, cellInputs.length - 1), 0);
+              focusCell(Math.min(r, remaining - 1), 0);
             }
           }),
         );
@@ -235,7 +256,11 @@ export class DataTableNode extends Node {
             if (event.key === "Enter" || event.key === "ArrowDown") {
               event.preventDefault();
               input.blur();
-              focusCell(Math.min(r + 1, rowCount - 1), c);
+              // Enter in the last row carries on into a new one.
+              if (event.key === "Enter" && r === model.datasetProperty.value.rowCount - 1) {
+                model.addRow();
+              }
+              focusCell(Math.min(r + 1, model.datasetProperty.value.rowCount - 1), c);
             } else if (event.key === "ArrowUp") {
               event.preventDefault();
               input.blur();
@@ -266,6 +291,7 @@ export class DataTableNode extends Node {
       }
       renderedRowCount = dataset.rowCount;
       renderedColumnCount = dataset.columns.length;
+      renderedPageStart = pageStart;
     };
 
     /** Writes the model's text into the inputs, leaving the one being typed in alone. */
@@ -273,8 +299,20 @@ export class DataTableNode extends Node {
       const colors = css();
       const excluded = new Set(dataset.excludedRows);
       exclusionInputs.forEach((input, index) => {
-        input.checked = excluded.has(index);
+        input.checked = excluded.has(pageStart + index);
       });
+      pager.style.display = dataset.rowCount > TABLE.ROWS_PER_PAGE ? "flex" : "none";
+      pager.style.color = colors.text;
+      pager.style.borderTop = `1px solid ${colors.grid}`;
+      pageText.textContent = fillPattern(labels.tableRowsStringProperty.value, {
+        first: pageStart + 1,
+        last: pageStart + cellInputs.length,
+        total: dataset.rowCount,
+      });
+      previousPage.disabled = pageStart === 0;
+      nextPage.disabled = pageStart + TABLE.ROWS_PER_PAGE >= dataset.rowCount;
+      previousPage.setAttribute("aria-label", labels.previousRowsStringProperty.value);
+      nextPage.setAttribute("aria-label", labels.nextRowsStringProperty.value);
       caption.textContent = a11y.controls.dataTableStringProperty.value;
       dataset.columns.forEach((column, c) => {
         formulaButtons
@@ -292,7 +330,8 @@ export class DataTableNode extends Node {
         if (header && header !== document.activeElement) {
           header.value = columnLabel(column);
         }
-        cellInputs.forEach((rowInputs, r) => {
+        cellInputs.forEach((rowInputs, index) => {
+          const r = pageStart + index;
           const input = rowInputs[c];
           if (!input) {
             return;
@@ -316,21 +355,41 @@ export class DataTableNode extends Node {
     const markIncluded = () => {
       const colors = css();
       const flags = model.inclusionProperty.value.flags;
-      rows.forEach((tr, r) => {
-        const included = flags[r] === true;
+      rows.forEach((tr, index) => {
+        const included = flags[pageStart + index] === true;
         tr.style.background = included ? colors.included : "transparent";
-        (markers[r] as HTMLTableCellElement).textContent = included ? CHECK_MARK : "";
+        (markers[index] as HTMLTableCellElement).textContent = included ? CHECK_MARK : "";
       });
     };
 
-    wrapper.style.cssText = `width: ${options.width}px; height: ${options.height}px; overflow: auto; box-sizing: border-box; border-radius: 3px;`;
+    wrapper.style.cssText = `width: ${options.width}px; height: ${options.height}px; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; border-radius: 3px;`;
+    scroller.style.cssText = "flex: 1 1 auto; overflow: auto; min-height: 0;";
+    pager.style.cssText = `flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 4px; font: ${TABLE.FONT};`;
+    const pageButton = (text: string, step: number) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      button.style.font = TABLE.FONT;
+      button.addEventListener("click", () => showPage(pageStart + step * TABLE.ROWS_PER_PAGE));
+      return button;
+    };
+    const previousPage = pageButton("◀", -1);
+    const nextPage = pageButton("▶", 1);
+    pageText.setAttribute("role", "status");
+    pager.append(previousPage, pageText, nextPage);
 
     const domNode = new DOM(wrapper, { allowInput: true });
     this.addChild(domNode);
 
     const refresh = () => {
       const dataset = model.datasetProperty.value;
-      if (dataset.rowCount !== renderedRowCount || dataset.columns.length !== renderedColumnCount) {
+      // Deleting rows can leave the page on show past the end of the table.
+      pageStart = Math.min(pageStart, pageOf(Math.max(dataset.rowCount - 1, 0)));
+      if (
+        dataset.rowCount !== renderedRowCount ||
+        dataset.columns.length !== renderedColumnCount ||
+        pageStart !== renderedPageStart
+      ) {
         build(dataset);
       }
       fill(dataset);
@@ -345,7 +404,7 @@ export class DataTableNode extends Node {
     model.datasetProperty.link(refresh);
     model.inclusionProperty.lazyLink(markIncluded);
     // Colors and words are baked into the DOM, so a new profile or language rebuilds it.
-    Multilink.lazyMultilink(
+    Multilink.lazyMultilinkAny(
       [
         DataLabColors.tableHeaderBackgroundColorProperty,
         DataLabColors.tableIncludedRowColorProperty,
@@ -360,6 +419,9 @@ export class DataTableNode extends Node {
         labels.excludeStringProperty,
         labels.editFormulaStringProperty,
         labels.formulaDependencyStringProperty,
+        labels.tableRowsStringProperty,
+        labels.previousRowsStringProperty,
+        labels.nextRowsStringProperty,
         a11y.controls.excludeRowStringProperty,
       ],
       rebuild,

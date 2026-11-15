@@ -52,10 +52,17 @@ export class ResidualPlotNode extends Node {
     installGraphGestures(frame, this, graphView, { zoomsY: false });
 
     Multilink.multilink(
-      [model.fitProperty, xAxisRangeProperty, labels.residualsStringProperty, graphView.logXProperty],
-      (fit, xRange, residualsLabel, logX) => {
-        const xColumn = model.xColumnProperty.value;
-        const yColumn = model.yColumnProperty.value;
+      // The columns are listed for their names and units: renaming one changes the
+      // axis labels without changing the fit.
+      [
+        model.fitProperty,
+        xAxisRangeProperty,
+        labels.residualsStringProperty,
+        graphView.logXProperty,
+        model.xColumnProperty,
+        model.yColumnProperty,
+      ],
+      (fit, xRange, residualsLabel, logX, xColumn, yColumn) => {
         const indices = model.inclusionProperty.value.indices;
 
         const xs: number[] = [];

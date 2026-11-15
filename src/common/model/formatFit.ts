@@ -13,7 +13,6 @@ import { FitModel, type FitModelValue, MODEL_POWERS } from "./leastSquares.js";
 export const MODEL_SYMBOLS: Record<FitModelValue, readonly string[]> = {
   proportional: ["A"],
   linear: ["m", "b"],
-  weightedLinear: ["m", "b"],
   quadratic: ["A", "B", "C"],
   cubic: ["A", "B", "C", "D"],
   quartic: ["A", "B", "C", "D", "E"],
@@ -36,7 +35,6 @@ export const MODEL_SYMBOLS: Record<FitModelValue, readonly string[]> = {
 const MODEL_EQUATIONS: Record<FitModelValue, string> = {
   proportional: "y = A·x",
   linear: "y = m·x + b",
-  weightedLinear: "y = m·x + b",
   quadratic: "y = A·x² + B·x + C",
   cubic: "y = A·x³ + B·x² + C·x + D",
   quartic: "y = A·x⁴ + B·x³ + C·x² + D·x + E",

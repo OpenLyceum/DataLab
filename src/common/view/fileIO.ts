@@ -8,30 +8,37 @@
  * TrackLab's DataTableNode.
  */
 
+import { decodeText } from "../model/decodeText.js";
+
 export type TextHandler = (text: string, fileName: string) => void;
 
+/** Reads a file as text, whatever its encoding, and reports a file that cannot be read. */
+function readFile(file: File, handler: TextHandler, onError?: () => void): void {
+  file
+    .arrayBuffer()
+    .then((buffer) => handler(decodeText(new Uint8Array(buffer)), file.name))
+    .catch(() => onError?.());
+}
+
 /** File types offered by the picker. */
-const ACCEPTED_TYPES = ".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain";
+const ACCEPTED_TYPES = ".csv,.tsv,.txt,.dat,text/csv,text/tab-separated-values,text/plain";
 
 /** Shows the browser's file picker and hands the chosen file's text to `handler`. */
-export function openTextFile(handler: TextHandler, accept = ACCEPTED_TYPES): void {
+export function openTextFile(handler: TextHandler, onError?: () => void, accept = ACCEPTED_TYPES): void {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = accept;
   input.addEventListener("change", () => {
     const file = input.files?.[0];
     if (file) {
-      file
-        .text()
-        .then((text) => handler(text, file.name))
-        .catch(() => undefined);
+      readFile(file, handler, onError);
     }
   });
   input.click();
 }
 
 /** Accepts a file dropped anywhere on the page. Returns a function that removes the listeners. */
-export function installDropTarget(handler: TextHandler): () => void {
+export function installDropTarget(handler: TextHandler, onError?: () => void): () => void {
   const onDragOver = (event: DragEvent) => {
     if (event.dataTransfer?.types.includes("Files")) {
       event.preventDefault();
@@ -44,10 +51,7 @@ export function installDropTarget(handler: TextHandler): () => void {
       return;
     }
     event.preventDefault();
-    file
-      .text()
-      .then((text) => handler(text, file.name))
-      .catch(() => undefined);
+    readFile(file, handler, onError);
   };
   window.addEventListener("dragover", onDragOver);
   window.addEventListener("drop", onDrop);

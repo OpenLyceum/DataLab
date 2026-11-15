@@ -12,6 +12,10 @@
  * Zoom and pan (see GraphGestures): wheel or pinch on the plot, wheel or drag on an
  * axis, Shift+drag on the plot. The range lives in data units in the model, so
  * zooming never changes which rows are used.
+ *
+ * A drag normally writes the range to the model on every move, so the fit follows
+ * the pointer. An iterative model on a long table can take seconds per fit; there
+ * the drag moves only the band, and the range is written once, on release.
  */
 
 import { Multilink, type TReadOnlyProperty } from "scenerystack/axon";
@@ -19,8 +23,14 @@ import { clamp, Matrix3 } from "scenerystack/dot";
 import { Shape } from "scenerystack/kite";
 import { DragListener, KeyboardListener, Line, Node, Path, Rectangle } from "scenerystack/scenery";
 import { columnLabel } from "../../common/model/Dataset.js";
-import type { XRange } from "../../common/model/includedRows.js";
-import { evaluateFit, type FitSuccess, fitPole, highestAngularFrequency } from "../../common/model/leastSquares.js";
+import { orderedRange, type XRange } from "../../common/model/includedRows.js";
+import {
+  evaluateFit,
+  type FitSuccess,
+  fitPole,
+  highestAngularFrequency,
+  isIterativeModel,
+} from "../../common/model/leastSquares.js";
 import { axisCoordinate, axisValue } from "../../common/view/axisRange.js";
 import { ChartFrameNode } from "../../common/view/ChartFrameNode.js";
 import { installGraphGestures } from "../../common/view/GraphGestures.js";
@@ -91,15 +101,37 @@ export class PlotNode extends Node {
     const rangeListeners: DragListener[] = [];
     let rangeBeforeGesture: XRange | null = null;
     let isRangeGesture = false;
+    /** The range being dragged while the fit waits for the release; undefined otherwise. */
+    let previewRange: XRange | undefined;
+    let defersFit = false;
+    const currentRange = (): XRange | null => previewRange ?? model.rangeProperty.value;
     const beginRangeGesture = () => {
       rangeBeforeGesture = model.rangeProperty.value;
       isRangeGesture = true;
+      defersFit =
+        isIterativeModel(model.fitModelProperty.value) &&
+        model.inclusionProperty.value.validCount > PLOT.LIVE_FIT_MAX_POINTS;
+    };
+    /** Moves the range during a gesture, in the model or — when the fit is slow — in the preview. */
+    const dragRange = (a: number, b: number, y?: XRange) => {
+      if (!defersFit) {
+        model.setRange(a, b, y);
+      } else if (Number.isFinite(a) && Number.isFinite(b)) {
+        previewRange = y ? { ...orderedRange(a, b), y } : orderedRange(a, b);
+        updateRange();
+      }
     };
     const endRangeGesture = () => {
       isRangeGesture = false;
+      if (previewRange) {
+        const { min, max, y } = previewRange;
+        previewRange = undefined;
+        model.setRange(min, max, y);
+      }
     };
     const abandonRangeGesture = () => {
       if (isRangeGesture) {
+        previewRange = undefined;
         for (const listener of rangeListeners) {
           listener.interrupt();
         }
@@ -135,7 +167,7 @@ export class PlotNode extends Node {
           const range = model.rangeProperty.value;
           anchor = range ? (isStart ? range.max : range.min) : 0;
         },
-        drag: (event) => model.setRange(anchor, xFromPointer(event.pointer.point), model.rangeProperty.value?.y),
+        drag: (event) => dragRange(anchor, xFromPointer(event.pointer.point), currentRange()?.y),
         end: endRangeGesture,
       });
       rangeListeners.push(handleListener);
@@ -236,7 +268,7 @@ export class PlotNode extends Node {
           graphView.panY(panYRange, ((point.y - panStart.y) * panYRange.getLength()) / viewHeight);
         } else {
           const y = yFromPointer(event.pointer.point);
-          model.setRange(
+          dragRange(
             sweepStart,
             xFromPointer(event.pointer.point),
             graphView.rectangleSelectionProperty.value
@@ -264,7 +296,7 @@ export class PlotNode extends Node {
       },
       drag: (event) => {
         const min = xFromPointer(event.pointer.point) - grabOffset;
-        model.setRange(min, min + grabWidth, model.rangeProperty.value?.y);
+        dragRange(min, min + grabWidth, currentRange()?.y);
       },
       end: endRangeGesture,
     });
@@ -278,7 +310,7 @@ export class PlotNode extends Node {
 
     // ── Updates ───────────────────────────────────────────────────────────────
     const updateRange = () => {
-      const range = model.rangeProperty.value;
+      const range = currentRange();
       const axisMin = range ? toX(range.min) : Number.NaN;
       const axisMax = range ? toX(range.max) : Number.NaN;
 

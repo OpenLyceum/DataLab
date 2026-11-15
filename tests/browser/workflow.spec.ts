@@ -101,7 +101,7 @@ test("a linear fit to the level-track range gives the cart's speed", async ({ pa
   expect(await includedRowCount(page)).toBe(31);
 
   const results = await copiedResults(page);
-  expect(results).toContain("Linear: y = m·x + b");
+  expect(results).toContain("Linear: Position = m·Time + b");
   expect(results).toContain("Points used: 31");
   expect(results).toContain("Using 31 of 61 rows · Time from 1.500 s to 3.000 s");
   expect(Math.abs(parameter(results, "m") - 0.9)).toBeLessThan(0.02);
@@ -115,7 +115,7 @@ test("a quadratic fit to the ramp range gives half the acceleration", async ({ p
   expect(await includedRowCount(page)).toBe(31);
 
   const results = await copiedResults(page);
-  expect(results).toContain("Quadratic: y = A·x² + B·x + C");
+  expect(results).toContain("Quadratic: Position = A·Time² + B·Time + C");
   expect(Math.abs(parameter(results, "A") - 0.3)).toBeLessThan(0.01);
   expect(results).toMatch(/^A = .* m\/s²$/m);
 });
@@ -767,4 +767,133 @@ test("PASCO Smart Cart capture turns signed samples into a new run", async ({ pa
   expect(Number(await page.getByLabel("Position (m), row 2", { exact: true }).inputValue())).toBeCloseTo(-0.09895, 8);
   await active.selectOption("0");
   await expect(page.locator("tbody tr")).toHaveCount(61);
+});
+
+/** Replaces the table by pasting outside any text field, as Ctrl+V does. */
+async function pasteTable(page: Page, text: string): Promise<void> {
+  await page.evaluate((clipboard) => {
+    const data = new DataTransfer();
+    data.setData("text/plain", clipboard);
+    document.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  }, text);
+}
+
+test("typing one bound of the range leaves the other exactly where it was", async ({ page }) => {
+  await open(page);
+  // The last x has more digits than a range field shows.
+  await pasteTable(page, "t,x\n1,1\n2,2\n3,3\n4.0000004,4\n");
+  await expect(page.locator("tbody tr")).toHaveCount(4);
+  const end = page.locator(".a11y-pdom-root [aria-label='Range end'], .a11y-pdom-root :text-is('Range end')").first();
+  // Inside the graph, so the edge is on show and can take the keyboard.
+  await setRange(page, "1", "4.1");
+  await end.focus();
+  await page.keyboard.press("ArrowLeft");
+  // The edge now sits on the last point; the field shows it rounded.
+  await expect(page.getByLabel("Range maximum")).toHaveValue("4");
+  expect(await includedRowCount(page)).toBe(4);
+
+  await page.getByLabel("Range minimum").fill("2");
+  await page.getByLabel("Range minimum").press("Enter");
+  // Rows 2 to 4: the last point is still inside, although "4" is below its x.
+  expect(await includedRowCount(page)).toBe(3);
+  await expect(page.getByRole("status").first()).toContainText("Using 3 of 4 rows");
+});
+
+test("table edits can be undone and redone, including a pasted-over table", async ({ page }) => {
+  await open(page);
+  const undo = page.getByRole("button", { name: "Undo", exact: true });
+  const redo = page.getByRole("button", { name: "Redo", exact: true });
+  await expect(undo).toBeDisabled();
+
+  await page.getByLabel("Delete row 1", { exact: true }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(60);
+  await pasteTable(page, "a,b\n1,2\n3,4\n");
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await expect(page.getByRole("status").first()).toContainText("Table replaced. Undo brings the previous table back.");
+
+  await undo.dispatchEvent("click");
+  await expect(page.locator("tbody tr")).toHaveCount(60);
+  await expect(page.getByLabel("Position (m), row 1", { exact: true })).toHaveValue("0.0001");
+  // Ctrl+Z outside a text field is the same Undo.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press("Control+z");
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+  await expect(undo).toBeDisabled();
+
+  await redo.dispatchEvent("click");
+  await expect(page.locator("tbody tr")).toHaveCount(60);
+  await page.keyboard.press("Control+y");
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await expect(redo).toBeDisabled();
+});
+
+test("every run comes back after a reload", async ({ page }) => {
+  await open(page);
+  await pressButton(page, "New run");
+  await pasteTable(page, "Time (s),Signal (V)\n0,5\n1,6\n2,8\n3,12");
+  await selectFitModel(page, "Quadratic");
+  await setRange(page, "0", "2");
+  const active = page.getByLabel("Active run", { exact: true });
+  await expect(active.locator("option")).toHaveCount(2);
+
+  await open(page);
+  await expect(active.locator("option")).toHaveCount(2);
+  await expect(active).toHaveValue("1");
+  await expect(page.getByLabel("Signal (V), row 4", { exact: true })).toHaveValue("12");
+  await expect(fitModelButton(page)).toHaveAccessibleName("Fit model Quadratic");
+  // The range starts afresh after a reload; the tables and settings do not.
+  await expect(page.getByLabel("Range minimum")).toHaveValue("");
+  await active.selectOption("0");
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+});
+
+test("a doubtful import is shown for correction before it replaces the table", async ({ page }) => {
+  await open(page);
+  // A separator the reader does not know leaves one column with no numbers in it.
+  await pasteTable(page, "t|x\n1|2\n2|4\n3|6\n");
+  const dialog = page.getByRole("dialog", { name: "Import options" });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(61);
+
+  // A title line, a units row and decimal commas are read without asking.
+  await pasteTable(page, "Pendule du 3 mars\nLongueur;Période\nm;s\n0,25;1,00\n0,50;1,42\n0,75;1,74\n");
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator("tbody tr")).toHaveCount(3);
+  await expect(page.getByLabel("Période (s), row 2", { exact: true })).toHaveValue("1,42");
+
+  // A text column asks first; the choices can be changed and the preview follows.
+  await pasteTable(page, "Trial,Length (m)\nfirst,0.25\nsecond,0.50\n");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("cell", { name: "second" })).toBeVisible();
+  await dialog.getByLabel("First row holds column names").uncheck();
+  await expect(dialog.getByRole("cell", { name: "Trial" })).toBeVisible();
+  await dialog.getByLabel("First row holds column names").check();
+  await dialog.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(2);
+  await expect(page.getByLabel("Length (m), row 2", { exact: true })).toHaveValue("0.50");
+});
+
+test("Enter in the last row adds a row, and a calculated column can differentiate", async ({ page }) => {
+  await open(page);
+  await pasteTable(page, "t,x\n0,0\n1,1\n");
+  const last = page.getByLabel("t, row 2", { exact: true });
+  await last.focus();
+  await last.press("Enter");
+  await expect(page.locator("tbody tr")).toHaveCount(3);
+  const added = page.getByLabel("t, row 3", { exact: true });
+  await expect(added).toBeFocused();
+  await added.fill("2");
+  await added.press("Tab");
+  await page.getByLabel("x, row 3", { exact: true }).fill("4");
+  await page.getByLabel("x, row 3", { exact: true }).press("ArrowUp");
+
+  await pressButton(page, "Calculated column");
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Column name").fill("v");
+  await dialog.getByLabel("Formula", { exact: true }).fill("derivative(C2, C1)");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByLabel("v, row 2", { exact: true })).toHaveValue("2");
+  await expect(page.getByLabel("v, row 3", { exact: true })).toHaveValue("3");
 });
