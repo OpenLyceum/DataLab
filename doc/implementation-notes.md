@@ -32,6 +32,7 @@ two column choosers and the two range fields are real HTML elements mounted with
 `new DOM(element, { allowInput: true })`, following TrackLab's read-only table.
 Native elements give text entry, selection, the clipboard and touch keyboards for
 free. The cost is that they sit in the visual layer rather than the parallel DOM.
+Pop-ups are native `<dialog>` elements built by `openDialog()`.
 
 Table details worth knowing:
 
@@ -43,7 +44,8 @@ Table details worth knowing:
   Escape restores the model's text.
 - A paste containing a tab or newline is treated as a block and written through
   `pasteBlock()`; a single value pastes natively.
-- At most 1000 rows are rendered. All rows are still plotted and fitted.
+- 1000 rows are rendered at a time, with a pager under the table when there are
+  more. All rows are still plotted and fitted.
 
 ## Graphs
 
@@ -160,5 +162,32 @@ browser. The recording opens in a new run. The channel and conversion are
 documented in [PASCO’s Python library](https://github.com/PASCOscientific/pasco_python).
 Capture requires a browser and platform with Web Bluetooth support. The
 protocol and capture workflow were exercised with a simulated GATT device.
+
+0.4 also hardens what was there:
+
+- **One fit per edit.** The model gathers everything a fit depends on into one
+  property, so an import or a row delete fits once instead of three times, and
+  editing a column that is not plotted does not fit at all. With an iterative
+  model on a long table, a range drag moves a preview band and fits on release.
+- **Undo and redo** for every table edit, import and paste (buttons, Ctrl+Z,
+  Ctrl+Y). A paste outside a text field says that it replaced the table.
+- **The whole workspace is recovered after a reload**, not only the table on
+  show. A store that is full is reported once and never left holding an older
+  table.
+- **Import** reads space-aligned files, title lines above the table, a units
+  row, a single column of decimal commas, grouped thousands, and Windows-1252
+  and UTF-16 files. When a column still comes out without numbers, a dialog
+  shows the reading and lets the student change it. Unreadable files say so.
+- **The range fields** no longer replace an untouched bound with its rounded
+  text.
+- **The table** shows rows a page (1000) at a time, so every row can be reached;
+  Enter in the last row adds a row.
+- **Calculated columns** gain `derivative(y, x)`, `integral(y, x)`, `tan` and
+  `pi`.
+- **Weighted linear** is gone as a separate model: the uncertainty column
+  already weights every model. A caution appears when reduced χ² is far from 1.
+- **Graph export** is drawn at three times the on-screen size.
+- Dialogs share `openDialog()` and take the profile's colors; run and range
+  controls moved out of `DataLabScreenView`.
 
 Later: PDF report and a shared fleet package for graph, table and fit code.

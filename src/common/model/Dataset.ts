@@ -9,7 +9,16 @@
  * operation returns a new Dataset, so a Property holding one notifies on each edit.
  */
 
-import { compileFormula, formulaReferences, shiftFormulaAfterDeletion } from "./columnFormula.js";
+import {
+  compileFormula,
+  createFormulaContext,
+  evaluateFormula,
+  formulaReferences,
+  shiftFormulaAfterDeletion,
+} from "./columnFormula.js";
+
+/** Significant figures shown in a calculated cell; the value itself keeps full precision. */
+const CALCULATED_DIGITS = 12;
 
 export type Column = {
   readonly name: string;
@@ -30,6 +39,9 @@ export type Dataset = {
 
 const NUMBER_PATTERN = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 const DECIMAL_COMMA_PATTERN = /^[+-]?(\d+,?\d*|,\d+)([eE][+-]?\d+)?$/;
+/** Thousands grouped by commas with a decimal point, and the reverse. */
+const GROUPED_POINT_PATTERN = /^[+-]?\d{1,3}(,\d{3})+(\.\d*)?$/;
+const GROUPED_COMMA_PATTERN = /^[+-]?\d{1,3}(\.\d{3})+(,\d*)?$/;
 
 /**
  * Reads a cell as a number, or NaN. With `decimalComma`, "1,5" reads as 1.5 —
@@ -42,6 +54,14 @@ export function parseNumber(text: string, decimalComma = false): number {
   }
   if (decimalComma && DECIMAL_COMMA_PATTERN.test(trimmed)) {
     return Number(trimmed.replace(",", "."));
+  }
+  // "1,234.5" and "1,234,567" can only be grouped thousands. "1,234" alone is
+  // grouped only where a comma is not a decimal mark.
+  if (GROUPED_POINT_PATTERN.test(trimmed) && (!decimalComma || /\.|,.*,/.test(trimmed))) {
+    return Number(trimmed.replace(/,/g, ""));
+  }
+  if (decimalComma && GROUPED_COMMA_PATTERN.test(trimmed) && /,|\..*\./.test(trimmed)) {
+    return Number(trimmed.replace(/\./g, "").replace(",", "."));
   }
   return Number.NaN;
 }
@@ -60,6 +80,11 @@ export function columnLabel(column: Column): string {
   return column.unit === "" ? column.name : `${column.name} (${column.unit})`;
 }
 
+/** A calculated value as cell text, without the trailing digits of binary rounding (0.1 + 0.2). */
+function calculatedText(value: number): string {
+  return Number.isFinite(value) ? String(Number(value.toPrecision(CALCULATED_DIGITS))) : "";
+}
+
 /** Recalculate left to right so a formula can use earlier calculated columns. */
 export function recalculateColumns(dataset: Dataset): Dataset {
   if (!dataset.columns.some((column) => column.formula !== undefined)) {
@@ -72,17 +97,11 @@ export function recalculateColumns(dataset: Dataset): Dataset {
       continue;
     }
     const expression = compileFormula(column.formula, columns.length);
-    const values = Array.from({ length: dataset.rowCount }, (_, row) => {
-      let validInputs = true;
-      const value =
-        expression?.((index) => {
-          const input = columns[index]?.values[row] ?? Number.NaN;
-          validInputs &&= Number.isFinite(input);
-          return input;
-        }) ?? Number.NaN;
-      return validInputs && Number.isFinite(value) ? value : Number.NaN;
-    });
-    columns.push({ ...column, values, texts: values.map((value) => (Number.isFinite(value) ? String(value) : "")) });
+    const context = createFormulaContext(dataset.rowCount, (index, row) => columns[index]?.values[row] ?? Number.NaN);
+    const values = Array.from({ length: dataset.rowCount }, (_, row) =>
+      expression ? evaluateFormula(expression, context, row) : Number.NaN,
+    );
+    columns.push({ ...column, values, texts: values.map(calculatedText) });
   }
   return { ...dataset, columns };
 }

@@ -1,5 +1,6 @@
 import { formatSignificant, parameterUnit, withUnit } from "../../common/model/formatFit.js";
 import { analyzeRange } from "../../common/model/rangeAnalysis.js";
+import { openDialog } from "../../common/view/openDialog.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
 
@@ -14,18 +15,15 @@ export function showRangeAnalysis(model: DataLabModel): void {
     model.datasetProperty.value.excludedRows ?? [],
   );
 
-  const previousFocus = document.activeElement;
-  const dialog = document.createElement("dialog");
-  dialog.dataset["sceneryAllowInput"] = "true";
-  dialog.style.cssText = "max-width:min(90vw,32rem);max-height:80vh;font:1rem system-ui";
-  dialog.setAttribute("aria-label", labels.rangeAnalysisStringProperty.value);
-  const title = document.createElement("h2");
-  title.textContent = labels.rangeAnalysisStringProperty.value;
+  const { body, button, close, show } = openDialog(labels.rangeAnalysisStringProperty.value, {
+    maxWidth: "min(90vw, 32rem)",
+  });
   const note = document.createElement("p");
+  note.style.margin = "0";
   note.textContent = results
     ? labels.rangeAnalysisHelpStringProperty.value
     : labels.rangeAnalysisEmptyStringProperty.value;
-  dialog.append(title, note);
+  body.append(note);
   if (results) {
     const list = document.createElement("dl");
     const unit = y?.unit ?? "";
@@ -53,19 +51,8 @@ export function showRangeAnalysis(model: DataLabModel): void {
             );
       list.append(name, entry);
     }
-    dialog.append(list);
+    body.append(list);
   }
-  const close = document.createElement("button");
-  close.type = "button";
-  close.textContent = labels.closeComparisonStringProperty.value;
-  close.addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", () => {
-    dialog.remove();
-    if (previousFocus instanceof HTMLElement) {
-      previousFocus.focus();
-    }
-  });
-  dialog.append(close);
-  document.body.append(dialog);
-  dialog.showModal();
+  button(labels.closeComparisonStringProperty.value, close);
+  show();
 }

@@ -172,6 +172,13 @@ export const PLOT = {
   FINE_STEP_FRACTION: 0.01,
   /** Page Up/Down step this many data points. */
   PAGE_POINTS: 10,
+  /**
+   * With an iterative model and more valid points than this, a range drag is
+   * previewed and the fit is made once, on release, instead of on every move.
+   */
+  LIVE_FIT_MAX_POINTS: 150,
+  /** Scale of the exported PNG relative to the on-screen graph. */
+  EXPORT_SCALE: 3,
 } as const;
 
 /** Residual plot geometry and scaling. */
@@ -195,8 +202,8 @@ export const TABLE = {
   REMOVE_BUTTON_WIDTH: 23,
   EXCLUSION_WIDTH: 48,
   CELL_PADDING: "3px 5px",
-  /** Rows drawn in the table; every row is still plotted and fitted. */
-  MAX_RENDERED_ROWS: 1000,
+  /** Rows drawn in the table at a time; every row is still plotted and fitted. */
+  ROWS_PER_PAGE: 1000,
 } as const;
 
 /** Results panel spacing (px). */
@@ -221,6 +228,12 @@ export const AXIS = {
 export const FIT_DISPLAY = {
   /** Below this many leftover points (n − p), uncertainties come with a caution. */
   CAUTION_DEGREES_OF_FREEDOM: 3,
+  /**
+   * Reduced χ² outside this interval comes with a caution: the supplied
+   * uncertainties are then too small (or the model wrong), or too large.
+   */
+  REDUCED_CHI_SQUARED_LOW: 0.2,
+  REDUCED_CHI_SQUARED_HIGH: 3,
   R_SQUARED_DIGITS: 5,
 } as const;
 
@@ -241,9 +254,20 @@ export const PARSE = {
   SNIFF_LINE_COUNT: 20,
 } as const;
 
+/** Import dialog. */
+export const IMPORT = {
+  /** Rows of the parsed table shown in the preview. */
+  PREVIEW_ROWS: 8,
+} as const;
+
 /** Calculated-column formula limits. */
 export const FORMULA = {
   MAX_LENGTH: 256,
+} as const;
+
+/** Undo history of table edits. */
+export const HISTORY = {
+  MAX_UNDO_STEPS: 100,
 } as const;
 
 /** Session / run naming. */
@@ -342,7 +366,9 @@ DataLabNamespace.register("DataLabConstants", {
   FIT_DISPLAY,
   FORMAT,
   PARSE,
+  IMPORT,
   FORMULA,
+  HISTORY,
   SESSION,
   QR,
   EXPONENTIAL_FIT,

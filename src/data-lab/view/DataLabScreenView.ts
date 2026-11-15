@@ -15,18 +15,18 @@ import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
 import { DOM, HBox, Node, Text, VBox } from "scenerystack/scenery";
 import { ResetAllButton } from "scenerystack/scenery-phet";
 import { ScreenView, type ScreenViewOptions } from "scenerystack/sim";
-import { Checkbox, ComboBox, TextPushButton } from "scenerystack/sun";
+import { Checkbox, ComboBox } from "scenerystack/sun";
 import {
   DATA_LAB_COMBO_BOX_OPTIONS,
-  FLAT_PANEL_PUSH_BUTTON_OPTIONS,
   FLAT_RESET_ALL_BUTTON_OPTIONS,
   LIGHT_SURFACE_TEXT_FILL,
 } from "../../common/DataLabButtonOptions.js";
 import { DataLabPanel } from "../../common/DataLabPanel.js";
-import { columnLabel, createColumn, isNumericColumn, parseNumber } from "../../common/model/Dataset.js";
+import { columnLabel, type Dataset, isNumericColumn } from "../../common/model/Dataset.js";
 import { exportCsv } from "../../common/model/exportCsv.js";
 import { FIT_MODELS } from "../../common/model/formatFit.js";
-import { FitModel, type FitModelValue } from "../../common/model/leastSquares.js";
+import type { FitModelValue } from "../../common/model/leastSquares.js";
+import { parseTable } from "../../common/model/parseTable.js";
 import { downloadBlob, downloadText, installDropTarget, openTextFile } from "../../common/view/fileIO.js";
 import DataLabColors from "../../DataLabColors.js";
 import {
@@ -36,39 +36,47 @@ import {
   GRAPH_EXPORT_FILE_NAME,
   HTML_CONTROL_FONT,
   LAYOUT,
+  PLOT,
   PLOT_HEIGHT,
   PLOT_LEFT,
   PLOT_WIDTH,
-  RANGE_FIELD_WIDTH,
   RESIDUAL_PLOT_GAP,
   RESIDUAL_PLOT_HEIGHT,
   RIGHT_COLUMN_WIDTH,
   SCREEN_VIEW_MARGIN,
   SELECT_WIDTH,
-  SESSION_FILE_NAME,
   TABLE_HEIGHT,
   TABLE_WIDTH,
 } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabPreferencesModel } from "../../preferences/DataLabPreferencesModel.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
-import { RunWorkspace } from "../model/RunWorkspace.js";
-import { decodeSession, encodeSession, type Session } from "../model/sessionFile.js";
-import { capturePasco } from "./capturePasco.js";
+import { createTextButton } from "./createTextButton.js";
 import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
 import { editCalculatedColumn } from "./editCalculatedColumn.js";
-import { editRun } from "./editRun.js";
 import { fillPattern } from "./fillPattern.js";
 import { createFitTextProperty, fitSummary, modelNameProperties, pinnedFitText } from "./fitText.js";
 import { GraphView } from "./GraphView.js";
 import { PlotNode } from "./PlotNode.js";
+import { createRangeControls } from "./RangeControls.js";
 import { ResidualPlotNode } from "./ResidualPlotNode.js";
 import { ResultsPanel } from "./ResultsPanel.js";
+import { createRunControls } from "./RunControls.js";
+import { isDoubtfulImport, reviewImport } from "./reviewImport.js";
 import { showFitComparison } from "./showFitComparison.js";
 import { showRangeAnalysis } from "./showRangeAnalysis.js";
 
 export type DataLabScreenViewOptions = ScreenViewOptions;
+
+/** True when a keystroke or paste belongs to a text field or an open dialog, not to the table as a whole. */
+function isTextEntry(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof Element && target.closest("dialog") !== null)
+  );
+}
 
 export class DataLabScreenView extends ScreenView {
   /** The visible x and y intervals; created in the constructor, once the model is known. */
@@ -92,136 +100,82 @@ export class DataLabScreenView extends ScreenView {
     super(options);
 
     this.graphView = new GraphView(model);
+    const graphView = this.graphView;
 
     const labels = StringManager.getInstance().getLabels();
     const a11y = StringManager.getInstance().getDataLabA11yStrings();
     const bounds = this.layoutBounds;
     const textOptions = { font: FONTS.CONTROL, fill: DataLabColors.textColorProperty };
+    const createButton = createTextButton;
 
-    const createButton = (string: typeof labels.openFileStringProperty, listener: () => void) =>
-      new TextPushButton(string, {
-        ...FLAT_PANEL_PUSH_BUTTON_OPTIONS,
-        font: FONTS.CONTROL,
-        textFill: LIGHT_SURFACE_TEXT_FILL,
-        maxTextWidth: LAYOUT.BUTTON_MAX_TEXT_WIDTH,
-        xMargin: LAYOUT.BUTTON_X_MARGIN,
-        yMargin: LAYOUT.BUTTON_Y_MARGIN,
-        listener,
-      });
-
-    const runName = (position: number) => fillPattern(labels.defaultRunStringProperty.value, { position });
-    const captureRun = (): Session => ({
-      ...model.fitSettings(),
-      dataset: model.datasetProperty.value,
-      xColumn: model.xColumnIndexProperty.value,
-      yColumn: model.yColumnIndexProperty.value,
-      logX: this.graphView.logXProperty.value,
-      logY: this.graphView.logYProperty.value,
-      showResiduals: preferences.showResidualsProperty.value,
-      pin: model.pinnedFitProperty.value?.settings ?? null,
-    });
-    const restoreRun = (session: Session) => {
-      model.loadSession(session);
-      this.graphView.setLogAxes(session.logX, session.logY);
-      this.graphView.autoScale();
-      preferences.showResidualsProperty.value = session.showResiduals;
-      this.messageProperty.value = "";
-    };
-    const runWorkspace = new RunWorkspace(runName(1), captureRun, restoreRun);
-    const runSelect = document.createElement("select");
-    runSelect.style.cssText = `width: ${LAYOUT.RUN_SELECT_WIDTH}px; box-sizing: border-box; font: ${HTML_CONTROL_FONT}; padding: 2px;`;
-    labels.activeRunStringProperty.link((name) => runSelect.setAttribute("aria-label", name));
-    const refreshRuns = () => {
-      runSelect.replaceChildren(...runWorkspace.names.map((name, i) => new Option(name, String(i))));
-      runSelect.value = String(runWorkspace.selectedIndex);
-    };
-    refreshRuns();
-    runSelect.addEventListener("change", () => runWorkspace.select(Number(runSelect.value)));
-    const nextRunName = () => {
-      const names = runWorkspace.names;
-      let runNumber = names.length + 1;
-      while (names.includes(runName(runNumber))) {
-        runNumber++;
-      }
-      return runName(runNumber);
-    };
-    const addRun = (dataset: Session["dataset"], name: string, hasData: boolean) => {
-      runWorkspace.add(name, {
-        dataset,
-        xColumn: hasData ? 0 : -1,
-        yColumn: hasData ? 1 : -1,
-        uncertaintyColumn: -1,
-        range: null,
-        model: FitModel.LINEAR,
-        logX: false,
-        logY: false,
-        showResiduals: preferences.showResidualsProperty.value,
-        pin: null,
-      });
-      refreshRuns();
-    };
-    const newRunButton = createButton(labels.newRunStringProperty, () => {
-      const columnName = (position: number) => fillPattern(labels.defaultColumnNameStringProperty.value, { position });
-      addRun(
-        {
-          columns: [createColumn(columnName(1), "", [""]), createColumn(columnName(2), "", [""])],
-          rowCount: 1,
-        },
-        nextRunName(),
-        false,
-      );
-    });
-    const captureButton = createButton(labels.capturePascoStringProperty, () => {
-      capturePasco((dataset, name) => addRun(dataset, name, true));
-    });
-    const manageRunButton = createButton(labels.manageRunStringProperty, () => editRun(runWorkspace, refreshRuns));
-    const runButtons = new HBox({
-      spacing: LAYOUT.BUTTON_ROW_SPACING,
-      children: [new DOM(runSelect, { allowInput: true }), newRunButton, manageRunButton],
-    });
+    const runs = createRunControls(model, graphView, preferences, this.messageProperty);
 
     // ── Import ────────────────────────────────────────────────────────────────
-    const importText = (text: string) => {
-      const imported = model.importText(text, (position) =>
-        fillPattern(labels.defaultColumnNameStringProperty.value, { position }),
-      );
-      this.graphView.autoScale();
-      this.messageProperty.value = imported ? "" : labels.importFailedStringProperty.value;
+    const defaultColumnName = (position: number) =>
+      fillPattern(labels.defaultColumnNameStringProperty.value, { position });
+    const fileUnreadable = () => {
+      this.messageProperty.value = labels.fileReadFailedStringProperty.value;
     };
-    const openSession = (text: string) => {
-      const session = decodeSession(text, runName(1));
-      if (session) {
-        runWorkspace.load(session);
-        refreshRuns();
+    /** Replaces the table. `replacedMessage` is shown when the student did not ask for a new table by name. */
+    const importText = (text: string, replacedMessage = "") => {
+      const { dataset } = parseTable(text, { defaultColumnName });
+      if (dataset.columns.length === 0 || dataset.rowCount === 0) {
+        this.messageProperty.value = labels.importFailedStringProperty.value;
+        return;
       }
-      this.messageProperty.value = session ? "" : labels.sessionInvalidStringProperty.value;
+      const accept = (imported: Dataset) => {
+        model.importDataset(imported);
+        graphView.autoScale();
+        this.messageProperty.value = replacedMessage;
+      };
+      // A reading that left a column without numbers is shown for correction first.
+      if (isDoubtfulImport(dataset)) {
+        reviewImport(text, defaultColumnName, accept);
+      } else {
+        accept(dataset);
+      }
     };
     installDropTarget((text, name) => {
       if (name.toLowerCase().endsWith(".json")) {
-        openSession(text);
+        runs.openSession(text);
       } else {
         importText(text);
       }
-    });
+    }, fileUnreadable);
 
     // Ctrl+V anywhere outside a text field replaces the table with the clipboard.
+    // It is easy to do by accident, so it says what happened and how to go back.
     document.addEventListener("paste", (event) => {
-      const target = event.target;
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        (target instanceof Element && target.closest("dialog"))
-      ) {
+      if (isTextEntry(event.target)) {
         return;
       }
       const text = event.clipboardData?.getData("text/plain") ?? "";
       if (text.trim() !== "") {
         event.preventDefault();
-        importText(text);
+        importText(text, labels.tableReplacedStringProperty.value);
       }
     });
 
-    const openButton = createButton(labels.openFileStringProperty, () => openTextFile(importText));
+    // Ctrl+Z and Ctrl+Y (or Shift+Ctrl+Z) undo and redo table edits. Inside a text
+    // field they keep their usual meaning for the text being typed.
+    document.addEventListener("keydown", (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || isTextEntry(event.target)) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "z" || key === "y") {
+        event.preventDefault();
+        if (key === "y" || event.shiftKey) {
+          model.redo();
+        } else {
+          model.undo();
+        }
+      }
+    });
+
+    const openButton = createButton(labels.openFileStringProperty, () =>
+      openTextFile((text) => importText(text), fileUnreadable),
+    );
     const pasteButton = createButton(labels.pasteTableStringProperty, () => {
       // Reading the clipboard needs the browser's permission; without it the
       // student is pointed to Ctrl+V, which never does.
@@ -229,29 +183,29 @@ export class DataLabScreenView extends ScreenView {
         this.messageProperty.value = labels.pasteHintStringProperty.value;
       };
       if (navigator.clipboard?.readText) {
-        navigator.clipboard.readText().then(importText).catch(showHint);
+        navigator.clipboard
+          .readText()
+          .then((text) => importText(text))
+          .catch(showHint);
       } else {
         showHint();
       }
     });
     const sampleButton = createButton(labels.sampleDataStringProperty, () => {
       model.loadSample();
-      this.graphView.autoScale();
+      graphView.autoScale();
       this.messageProperty.value = "";
     });
     const importButtons = new HBox({
       spacing: LAYOUT.BUTTON_ROW_SPACING,
-      children: [openButton, pasteButton, sampleButton, captureButton],
+      children: [openButton, pasteButton, sampleButton, runs.captureButton],
     });
 
     // ── Table ─────────────────────────────────────────────────────────────────
     const table = new DataTableNode(model, { width: TABLE_WIDTH, height: TABLE_HEIGHT });
     const addRowButton = createButton(labels.addRowStringProperty, () => model.addRow());
     const addColumnButton = createButton(labels.addColumnStringProperty, () => {
-      const name = fillPattern(labels.defaultColumnNameStringProperty.value, {
-        position: model.datasetProperty.value.columns.length + 1,
-      });
-      model.addColumn(name);
+      model.addColumn(defaultColumnName(model.datasetProperty.value.columns.length + 1));
     });
     const calculatedButton = createButton(labels.calculatedColumnStringProperty, () => editCalculatedColumn(model));
     const exportButton = createButton(labels.exportCsvStringProperty, () => {
@@ -262,34 +216,34 @@ export class DataLabScreenView extends ScreenView {
       });
       downloadText(csv, EXPORT_FILE_NAME, "text/csv;charset=utf-8;");
     });
+    // Arrows keep the row inside the table's width; the names are read out.
+    const undoButton = createButton("↶", () => model.undo(), { accessibleName: labels.undoStringProperty });
+    const redoButton = createButton("↷", () => model.redo(), { accessibleName: labels.redoStringProperty });
+    model.canUndoProperty.link((canUndo) => {
+      undoButton.enabled = canUndo;
+    });
+    model.canRedoProperty.link((canRedo) => {
+      redoButton.enabled = canRedo;
+    });
     const tableButtons = new HBox({
       spacing: LAYOUT.BUTTON_ROW_SPACING,
-      children: [addRowButton, addColumnButton, exportButton],
-    });
-
-    const loadSessionButton = createButton(labels.openSessionStringProperty, () =>
-      openTextFile(openSession, ".json,application/json"),
-    );
-    const saveSessionButton = createButton(labels.saveSessionStringProperty, () => {
-      const text = encodeSession(runWorkspace.save());
-      downloadText(text, SESSION_FILE_NAME, "application/json");
+      children: [addRowButton, addColumnButton, exportButton, undoButton, redoButton],
     });
     const fileButtons = new HBox({
       spacing: LAYOUT.BUTTON_ROW_SPACING,
-      children: [calculatedButton, loadSessionButton, saveSessionButton],
+      children: [calculatedButton, runs.loadSessionButton, runs.saveSessionButton],
     });
 
     const leftColumn = new VBox({
       align: "left",
       spacing: LAYOUT.STACK_SPACING,
-      children: [runButtons, importButtons, table, tableButtons, fileButtons],
+      children: [runs.runRow, importButtons, table, tableButtons, fileButtons],
       left: bounds.minX + SCREEN_VIEW_MARGIN,
       top: bounds.minY + SCREEN_VIEW_MARGIN,
     });
     this.addChild(leftColumn);
 
     // ── Graphs ────────────────────────────────────────────────────────────────
-    const graphView = this.graphView;
     const plot = new PlotNode(model, graphView, { viewWidth: PLOT_WIDTH, viewHeight: PLOT_HEIGHT });
     // Position by the plot rectangle, not by bounds that change with the tick labels.
     plot.x = PLOT_LEFT;
@@ -310,7 +264,11 @@ export class DataLabScreenView extends ScreenView {
 
     const exportGraphButton = createButton(labels.exportPngStringProperty, () => {
       const background = DataLabColors.backgroundColorProperty.value.toCSS();
-      graphs.toCanvas((canvas) => {
+      // Drawn larger than on screen: the graph is going into a lab report.
+      const enlarged = new Node({ scale: PLOT.EXPORT_SCALE, children: [graphs] });
+      enlarged.toCanvas((canvas) => {
+        enlarged.removeAllChildren();
+        enlarged.dispose();
         const context = canvas.getContext("2d");
         if (!context) {
           return;
@@ -327,82 +285,9 @@ export class DataLabScreenView extends ScreenView {
       });
     });
 
-    // ── Range fields ──────────────────────────────────────────────────────────
-    const createField = (
-      accessibleName: typeof a11y.controls.rangeMinimumStringProperty,
-      width = RANGE_FIELD_WIDTH,
-    ) => {
-      const input = document.createElement("input");
-      input.type = "text";
-      input.inputMode = "decimal";
-      input.autocomplete = "off";
-      input.style.cssText = `width: ${width}px; box-sizing: border-box; font: ${HTML_CONTROL_FONT}; padding: 3px 5px; text-align: right;`;
-      accessibleName.link((name) => input.setAttribute("aria-label", name));
-      input.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          input.blur();
-        }
-      });
-      return input;
-    };
-    const minField = createField(a11y.controls.rangeMinimumStringProperty);
-    const maxField = createField(a11y.controls.rangeMaximumStringProperty);
-    const minYField = createField(labels.rectangleMinimumStringProperty, 56);
-    const maxYField = createField(labels.rectangleMaximumStringProperty, 56);
-    const fieldText = (value: number) => String(Number(value.toPrecision(6)));
-    let editingBounds = false;
-    const commitRange = () => {
-      const min = parseNumber(minField.value, true);
-      const max = parseNumber(maxField.value, true);
-      const values = model.distinctXValues();
-      const yMin = parseNumber(minYField.value, true);
-      const yMax = parseNumber(maxYField.value, true);
-      const y =
-        Number.isFinite(yMin) && Number.isFinite(yMax)
-          ? { min: Math.min(yMin, yMax), max: Math.max(yMin, yMax) }
-          : undefined;
-      editingBounds = true;
-      try {
-        if (Number.isFinite(min) || Number.isFinite(max) || y) {
-          model.setRange(
-            Number.isFinite(min) ? min : (values[0] ?? max),
-            Number.isFinite(max) ? max : (values[values.length - 1] ?? min),
-            y,
-          );
-        } else {
-          model.clearRange();
-        }
-      } finally {
-        editingBounds = false;
-      }
-    };
-    for (const field of [minField, maxField, minYField, maxYField]) {
-      field.addEventListener("change", commitRange);
-    }
-    model.rangeProperty.link((range) => {
-      if (!editingBounds && minYField !== document.activeElement) {
-        minYField.value = range?.y ? fieldText(range.y.min) : "";
-      }
-      if (!editingBounds && maxYField !== document.activeElement) {
-        maxYField.value = range?.y ? fieldText(range.y.max) : "";
-      }
-      if (minField !== document.activeElement) {
-        minField.value = range ? fieldText(range.min) : "";
-      }
-      if (maxField !== document.activeElement) {
-        maxField.value = range ? fieldText(range.max) : "";
-      }
-    });
-    const unitText = new Text("", { ...textOptions, maxWidth: LAYOUT.RANGE_UNIT_MAX_WIDTH });
-    model.xColumnProperty.link((column) => {
-      unitText.string = column?.unit ?? "";
-    });
-
-    const clearRangeButton = createButton(labels.clearRangeStringProperty, () => {
-      minYField.value = "";
-      maxYField.value = "";
-      model.clearRange();
-    });
+    // ── Range ─────────────────────────────────────────────────────────────────
+    const rangeRow = createRangeControls(model);
+    const clearRangeButton = createButton(labels.clearRangeStringProperty, () => model.clearRange());
     const zoomButton = createButton(labels.zoomToRangeStringProperty, () => {
       const range = model.rangeProperty.value;
       if (range) {
@@ -418,19 +303,6 @@ export class DataLabScreenView extends ScreenView {
       autoScaleButton.enabled = !isAutoScaled;
     });
 
-    const rangeRow = new HBox({
-      spacing: LAYOUT.BUTTON_ROW_SPACING,
-      children: [
-        new Text(labels.rangeFromStringProperty, { ...textOptions, maxWidth: LAYOUT.RANGE_FROM_MAX_WIDTH }),
-        new DOM(minField, { allowInput: true }),
-        new Text(labels.rangeToStringProperty, { ...textOptions, maxWidth: LAYOUT.RANGE_TO_MAX_WIDTH }),
-        new DOM(maxField, { allowInput: true }),
-        unitText,
-        new Text(labels.rectangleYStringProperty, { ...textOptions, maxWidth: LAYOUT.RANGE_Y_MAX_WIDTH }),
-        new DOM(minYField, { allowInput: true }),
-        new DOM(maxYField, { allowInput: true }),
-      ],
-    });
     const analyzeButton = createButton(labels.rangeAnalysisStringProperty, () => showRangeAnalysis(model));
     const rangeButtons = new HBox({
       spacing: LAYOUT.BUTTON_ROW_SPACING,
@@ -653,18 +525,20 @@ export class DataLabScreenView extends ScreenView {
     this.addChild(
       new Node({
         pdomOrder: [
-          newRunButton,
-          manageRunButton,
+          runs.newRunButton,
+          runs.manageRunButton,
           openButton,
           pasteButton,
           sampleButton,
-          captureButton,
+          runs.captureButton,
           addRowButton,
           addColumnButton,
-          calculatedButton,
-          loadSessionButton,
-          saveSessionButton,
           exportButton,
+          undoButton,
+          redoButton,
+          calculatedButton,
+          runs.loadSessionButton,
+          runs.saveSessionButton,
           plot.rangeStartHandle,
           plot.rangeEndHandle,
           clearRangeButton,

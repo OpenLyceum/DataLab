@@ -58,11 +58,23 @@ export type RunSession = {
   readonly activeIndex: number;
 };
 
+/** "Weighted linear" was a separate model before weighting applied to every model. */
+function currentModelName<T extends FitSettings | null>(settings: T): T {
+  return settings && (settings.model as string) === "weightedLinear"
+    ? { ...settings, model: FitModel.LINEAR }
+    : settings;
+}
+
+function withCurrentModelNames(file: Session): Session {
+  const current = currentModelName(file);
+  return current.pin && typeof current.pin === "object" ? { ...current, pin: currentModelName(current.pin) } : current;
+}
+
 function decodeRun(value: unknown): Session | null {
   if (!value || typeof value !== "object") {
     return null;
   }
-  const file = value as Session;
+  const file = withCurrentModelNames(value as Session);
   const dataset = decodeDataset(file.dataset);
   if (
     !(dataset && validFit(file, dataset) && validIndex(file.xColumn, dataset) && validIndex(file.yColumn, dataset)) ||

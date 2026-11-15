@@ -102,8 +102,8 @@ and residual blank for them.
 
 ## Weighted fits
 
-Weighted linear requires a y-uncertainty column. The same column can be
-selected to weight any of the other models. It contains positive standard uncertainties in
+Choosing a y-uncertainty column weights whichever model is selected; there is
+no separate weighted model. The column contains positive standard uncertainties in
 the same units as y. Each design row and its y value are scaled by
 `min(σ) / σᵢ` before QR, which gives the same solution as weights `1 / σᵢ²`.
 Rows with missing, zero or negative uncertainties do not enter a weighted fit.
@@ -152,3 +152,19 @@ frequency search uses the median spacing between distinct x values to
 estimate a Nyquist limit, applied to the highest harmonic in the model.
 It also caps the frequency grid at 128 fundamental cycles across the
 selected range. Equations in the results use the selected axis names.
+
+## Calculated columns across rows
+
+`derivative(y, x)` is a central difference, `(y[i+1] − y[i−1]) / (x[i+1] − x[i−1])`,
+in table order; the first and last rows use their one neighbour. A row is blank
+when it or a neighbour is blank, or when the neighbours share an x.
+`integral(y, x)` is the running trapezoid sum from the first usable row; blank
+rows are blank and do not interrupt the sum. Both take any expression as
+arguments, so `derivative(derivative(C2, C1), C1)` is an acceleration.
+
+## Reduced χ² caution
+
+Weighted standard errors take the supplied σ at face value. When reduced χ² is
+above 3 or below 0.2 (with at least three degrees of freedom) the results carry
+a caution: the σ are then too small — or the model wrong — or too large, and
+the parameter uncertainties inherit the error.

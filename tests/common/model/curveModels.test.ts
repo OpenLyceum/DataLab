@@ -123,13 +123,9 @@ describe("expanded fit models", () => {
     expect(fitPole("sine", [2, 3, 4, 5])).toBeNull();
   });
 
-  it("requires a selected uncertainty column for weighted linear", () => {
-    expect(fitModel("weightedLinear", [0, 1, 2], [1, 3, 6])).toMatchObject({
-      ok: false,
-      reason: FitFailureReason.MISSING_UNCERTAINTY,
-    });
+  it("weights a linear fit by the supplied uncertainties", () => {
     // Weighted slope and intercept from the independent closed-form WLS solution.
-    const fit = fitModel("weightedLinear", [0, 1, 2], [1, 3, 6], [1, 1, 2]);
+    const fit = fitModel("linear", [0, 1, 2], [1, 3, 6], [1, 1, 2]);
     expect(fit).toMatchObject({
       ok: true,
       parameters: [expect.closeTo(7 / 3, 12), expect.closeTo(8 / 9, 12)],

@@ -1,4 +1,7 @@
-/** Local recovery for the last committed table on this browser and origin. */
+/**
+ * Reading a stored table, and recovery of the single table that releases before
+ * workspace recovery kept under their own key. See workspaceStorage.ts.
+ */
 
 import { compileFormula } from "../../common/model/columnFormula.js";
 import { type Column, type Dataset, recalculateColumns } from "../../common/model/Dataset.js";
@@ -67,10 +70,11 @@ export function restoreDataset(): Dataset | null {
   }
 }
 
-export function saveDataset(dataset: Dataset): void {
+/** Drops the single-table copy once the whole workspace has been saved. */
+export function forgetDataset(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataset));
+    localStorage.removeItem(STORAGE_KEY);
   } catch {
-    // Storage can be disabled or full. The live table remains usable.
+    // Storage can be disabled. There is then nothing to forget.
   }
 }

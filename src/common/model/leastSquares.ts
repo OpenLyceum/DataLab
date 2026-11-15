@@ -22,7 +22,6 @@ import { backSubstitute, householder, isRankDeficient, standardErrorsOf } from "
 export const FitModel = {
   PROPORTIONAL: "proportional",
   LINEAR: "linear",
-  WEIGHTED_LINEAR: "weightedLinear",
   QUADRATIC: "quadratic",
   CUBIC: "cubic",
   QUARTIC: "quartic",
@@ -48,7 +47,6 @@ export type FitModelValue = (typeof FitModel)[keyof typeof FitModel];
 export const MODEL_POWERS: Record<Exclude<FitModelValue, "exponential" | CurveModel>, readonly number[]> = {
   proportional: [1],
   linear: [1, 0],
-  weightedLinear: [1, 0],
   logarithmic: [1, 0],
   quadratic: [2, 1, 0],
   cubic: [3, 2, 1, 0],
@@ -64,7 +62,6 @@ export const FitFailureReason = {
   TOO_FEW_DISTINCT_X: "tooFewDistinctX",
   /** Proportional fit where every x is zero. */
   ALL_X_ZERO: "allXZero",
-  MISSING_UNCERTAINTY: "missingUncertainty",
   INVALID_UNCERTAINTY: "invalidUncertainty",
   NONLINEAR_FAILURE: "nonlinearFailure",
   UNSUPPORTED_X: "unsupportedX",
@@ -140,6 +137,11 @@ export function highestAngularFrequency(fit: FitSuccess): number {
     default:
       return 0;
   }
+}
+
+/** True for the models solved by iteration, which cost far more than one QR factorization. */
+export function isIterativeModel(model: FitModelValue): boolean {
+  return model === FitModel.EXPONENTIAL || isCurveModel(model);
 }
 
 export function requiresPositiveX(model: FitModelValue): boolean {
@@ -330,9 +332,6 @@ function fitLinearInParameters(
   const hasIntercept = powers.includes(0);
   const fail = (reason: FitFailureReasonValue): FitFailure => ({ ok: false, model, reason, required: p, count: n });
 
-  if (model === FitModel.WEIGHTED_LINEAR && !uncertainties) {
-    return fail(FitFailureReason.MISSING_UNCERTAINTY);
-  }
   if (predictors.some((x) => !Number.isFinite(x))) {
     return fail(FitFailureReason.UNSUPPORTED_X);
   }
