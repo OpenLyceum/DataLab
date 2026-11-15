@@ -1,10 +1,8 @@
 import { createColumn, type Dataset } from "../../common/model/Dataset.js";
 import { canCapturePasco, connectSmartCart } from "../../common/sensors/pascoSmartCart.js";
+import { PASCO } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import { fillPattern } from "./fillPattern.js";
-
-const INTERVAL_MS = 100;
-const MAX_SAMPLES = 6000;
 
 export function capturePasco(onCapture: (data: Dataset, name: string) => void): void {
   const labels = StringManager.getInstance().getLabels();
@@ -55,11 +53,11 @@ export function capturePasco(onCapture: (data: Dataset, name: string) => void): 
         endedByDisconnect = true;
         abort.abort();
       });
-      deviceName = cart.name?.slice(0, 80) || deviceName;
+      deviceName = cart.name?.slice(0, PASCO.DEVICE_NAME_MAX_LENGTH) || deviceName;
       status.textContent = labels.pascoRecordingStringProperty.value;
       let position = 0;
       let origin: number | undefined;
-      while (!abort.signal.aborted && times.length < MAX_SAMPLES) {
+      while (!abort.signal.aborted && times.length < PASCO.MAX_SAMPLES) {
         const sent = performance.now();
         const delta = await cart.sample();
         const received = performance.now();
@@ -73,7 +71,7 @@ export function capturePasco(onCapture: (data: Dataset, name: string) => void): 
         positions.push(String(position));
         status.textContent = fillPattern(labels.pascoSamplesStringProperty.value, { count: times.length });
         await new Promise<void>((resolve) =>
-          setTimeout(resolve, Math.max(0, INTERVAL_MS - (performance.now() - sent))),
+          setTimeout(resolve, Math.max(0, PASCO.INTERVAL_MS - (performance.now() - sent))),
         );
       }
     } catch {
@@ -86,7 +84,7 @@ export function capturePasco(onCapture: (data: Dataset, name: string) => void): 
       save.disabled = times.length === 0;
       if (endedByDisconnect) {
         status.textContent = labels.pascoFailedStringProperty.value;
-      } else if (times.length > 0 && (captureStopped || times.length === MAX_SAMPLES)) {
+      } else if (times.length > 0 && (captureStopped || times.length === PASCO.MAX_SAMPLES)) {
         status.textContent = fillPattern(labels.pascoSamplesStringProperty.value, { count: times.length });
       }
       start.disabled = times.length > 0;

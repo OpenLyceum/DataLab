@@ -13,7 +13,7 @@
 import { Multilink, type Property, StringProperty } from "scenerystack/axon";
 import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
 import { DOM, HBox, Node, Text, VBox } from "scenerystack/scenery";
-import { PhetFont, ResetAllButton } from "scenerystack/scenery-phet";
+import { ResetAllButton } from "scenerystack/scenery-phet";
 import { ScreenView, type ScreenViewOptions } from "scenerystack/sim";
 import { Checkbox, ComboBox, TextPushButton } from "scenerystack/sun";
 import {
@@ -31,9 +31,11 @@ import { downloadBlob, downloadText, installDropTarget, openTextFile } from "../
 import DataLabColors from "../../DataLabColors.js";
 import {
   COLUMN_SPACING,
-  CONTROL_FONT_SIZE,
   EXPORT_FILE_NAME,
+  FONTS,
   GRAPH_EXPORT_FILE_NAME,
+  HTML_CONTROL_FONT,
+  LAYOUT,
   PLOT_HEIGHT,
   PLOT_LEFT,
   PLOT_WIDTH,
@@ -43,6 +45,7 @@ import {
   RIGHT_COLUMN_WIDTH,
   SCREEN_VIEW_MARGIN,
   SELECT_WIDTH,
+  SESSION_FILE_NAME,
   TABLE_HEIGHT,
   TABLE_WIDTH,
 } from "../../DataLabConstants.js";
@@ -50,7 +53,7 @@ import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabPreferencesModel } from "../../preferences/DataLabPreferencesModel.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
 import { RunWorkspace } from "../model/RunWorkspace.js";
-import { decodeSession, encodeSession, SESSION_FILE_NAME, type Session } from "../model/sessionFile.js";
+import { decodeSession, encodeSession, type Session } from "../model/sessionFile.js";
 import { capturePasco } from "./capturePasco.js";
 import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
@@ -66,10 +69,6 @@ import { showFitComparison } from "./showFitComparison.js";
 import { showRangeAnalysis } from "./showRangeAnalysis.js";
 
 export type DataLabScreenViewOptions = ScreenViewOptions;
-
-const CONTROL_FONT = new PhetFont(CONTROL_FONT_SIZE);
-const NOTE_FONT = new PhetFont(11);
-const HTML_FONT = `${CONTROL_FONT_SIZE}px Arial, sans-serif`;
 
 export class DataLabScreenView extends ScreenView {
   /** The visible x and y intervals; created in the constructor, once the model is known. */
@@ -97,16 +96,16 @@ export class DataLabScreenView extends ScreenView {
     const labels = StringManager.getInstance().getLabels();
     const a11y = StringManager.getInstance().getDataLabA11yStrings();
     const bounds = this.layoutBounds;
-    const textOptions = { font: CONTROL_FONT, fill: DataLabColors.textColorProperty };
+    const textOptions = { font: FONTS.CONTROL, fill: DataLabColors.textColorProperty };
 
     const createButton = (string: typeof labels.openFileStringProperty, listener: () => void) =>
       new TextPushButton(string, {
         ...FLAT_PANEL_PUSH_BUTTON_OPTIONS,
-        font: CONTROL_FONT,
+        font: FONTS.CONTROL,
         textFill: LIGHT_SURFACE_TEXT_FILL,
-        maxTextWidth: 110,
-        xMargin: 8,
-        yMargin: 5,
+        maxTextWidth: LAYOUT.BUTTON_MAX_TEXT_WIDTH,
+        xMargin: LAYOUT.BUTTON_X_MARGIN,
+        yMargin: LAYOUT.BUTTON_Y_MARGIN,
         listener,
       });
 
@@ -130,7 +129,7 @@ export class DataLabScreenView extends ScreenView {
     };
     const runWorkspace = new RunWorkspace(runName(1), captureRun, restoreRun);
     const runSelect = document.createElement("select");
-    runSelect.style.cssText = `width: 120px; box-sizing: border-box; font: ${HTML_FONT}; padding: 2px;`;
+    runSelect.style.cssText = `width: ${LAYOUT.RUN_SELECT_WIDTH}px; box-sizing: border-box; font: ${HTML_CONTROL_FONT}; padding: 2px;`;
     labels.activeRunStringProperty.link((name) => runSelect.setAttribute("aria-label", name));
     const refreshRuns = () => {
       runSelect.replaceChildren(...runWorkspace.names.map((name, i) => new Option(name, String(i))));
@@ -177,7 +176,7 @@ export class DataLabScreenView extends ScreenView {
     });
     const manageRunButton = createButton(labels.manageRunStringProperty, () => editRun(runWorkspace, refreshRuns));
     const runButtons = new HBox({
-      spacing: 6,
+      spacing: LAYOUT.BUTTON_ROW_SPACING,
       children: [new DOM(runSelect, { allowInput: true }), newRunButton, manageRunButton],
     });
 
@@ -240,7 +239,10 @@ export class DataLabScreenView extends ScreenView {
       this.graphView.autoScale();
       this.messageProperty.value = "";
     });
-    const importButtons = new HBox({ spacing: 6, children: [openButton, pasteButton, sampleButton, captureButton] });
+    const importButtons = new HBox({
+      spacing: LAYOUT.BUTTON_ROW_SPACING,
+      children: [openButton, pasteButton, sampleButton, captureButton],
+    });
 
     // ── Table ─────────────────────────────────────────────────────────────────
     const table = new DataTableNode(model, { width: TABLE_WIDTH, height: TABLE_HEIGHT });
@@ -260,7 +262,10 @@ export class DataLabScreenView extends ScreenView {
       });
       downloadText(csv, EXPORT_FILE_NAME, "text/csv;charset=utf-8;");
     });
-    const tableButtons = new HBox({ spacing: 6, children: [addRowButton, addColumnButton, exportButton] });
+    const tableButtons = new HBox({
+      spacing: LAYOUT.BUTTON_ROW_SPACING,
+      children: [addRowButton, addColumnButton, exportButton],
+    });
 
     const loadSessionButton = createButton(labels.openSessionStringProperty, () =>
       openTextFile(openSession, ".json,application/json"),
@@ -269,11 +274,14 @@ export class DataLabScreenView extends ScreenView {
       const text = encodeSession(runWorkspace.save());
       downloadText(text, SESSION_FILE_NAME, "application/json");
     });
-    const fileButtons = new HBox({ spacing: 6, children: [calculatedButton, loadSessionButton, saveSessionButton] });
+    const fileButtons = new HBox({
+      spacing: LAYOUT.BUTTON_ROW_SPACING,
+      children: [calculatedButton, loadSessionButton, saveSessionButton],
+    });
 
     const leftColumn = new VBox({
       align: "left",
-      spacing: 8,
+      spacing: LAYOUT.STACK_SPACING,
       children: [runButtons, importButtons, table, tableButtons, fileButtons],
       left: bounds.minX + SCREEN_VIEW_MARGIN,
       top: bounds.minY + SCREEN_VIEW_MARGIN,
@@ -328,7 +336,7 @@ export class DataLabScreenView extends ScreenView {
       input.type = "text";
       input.inputMode = "decimal";
       input.autocomplete = "off";
-      input.style.cssText = `width: ${width}px; box-sizing: border-box; font: ${HTML_FONT}; padding: 3px 5px; text-align: right;`;
+      input.style.cssText = `width: ${width}px; box-sizing: border-box; font: ${HTML_CONTROL_FONT}; padding: 3px 5px; text-align: right;`;
       accessibleName.link((name) => input.setAttribute("aria-label", name));
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
@@ -385,7 +393,7 @@ export class DataLabScreenView extends ScreenView {
         maxField.value = range ? fieldText(range.max) : "";
       }
     });
-    const unitText = new Text("", { ...textOptions, maxWidth: 50 });
+    const unitText = new Text("", { ...textOptions, maxWidth: LAYOUT.RANGE_UNIT_MAX_WIDTH });
     model.xColumnProperty.link((column) => {
       unitText.string = column?.unit ?? "";
     });
@@ -411,21 +419,21 @@ export class DataLabScreenView extends ScreenView {
     });
 
     const rangeRow = new HBox({
-      spacing: 6,
+      spacing: LAYOUT.BUTTON_ROW_SPACING,
       children: [
-        new Text(labels.rangeFromStringProperty, { ...textOptions, maxWidth: 90 }),
+        new Text(labels.rangeFromStringProperty, { ...textOptions, maxWidth: LAYOUT.RANGE_FROM_MAX_WIDTH }),
         new DOM(minField, { allowInput: true }),
-        new Text(labels.rangeToStringProperty, { ...textOptions, maxWidth: 30 }),
+        new Text(labels.rangeToStringProperty, { ...textOptions, maxWidth: LAYOUT.RANGE_TO_MAX_WIDTH }),
         new DOM(maxField, { allowInput: true }),
         unitText,
-        new Text(labels.rectangleYStringProperty, { ...textOptions, maxWidth: 25 }),
+        new Text(labels.rectangleYStringProperty, { ...textOptions, maxWidth: LAYOUT.RANGE_Y_MAX_WIDTH }),
         new DOM(minYField, { allowInput: true }),
         new DOM(maxYField, { allowInput: true }),
       ],
     });
     const analyzeButton = createButton(labels.rangeAnalysisStringProperty, () => showRangeAnalysis(model));
     const rangeButtons = new HBox({
-      spacing: 6,
+      spacing: LAYOUT.BUTTON_ROW_SPACING,
       children: [clearRangeButton, zoomButton, autoScaleButton, analyzeButton],
     });
 
@@ -438,7 +446,7 @@ export class DataLabScreenView extends ScreenView {
       }
     });
     const pinLegend = new Text(labels.pinnedFitLegendStringProperty, {
-      font: NOTE_FONT,
+      font: FONTS.NOTE,
       fill: DataLabColors.pinnedFitColorProperty,
       maxWidth: PLOT_WIDTH,
     });
@@ -448,7 +456,10 @@ export class DataLabScreenView extends ScreenView {
       compareButton.enabled = pin !== null;
       pinLegend.visible = pin !== null;
     });
-    const pinControls = new HBox({ spacing: 6, children: [pinButton, compareButton, removePinButton, pinLegend] });
+    const pinControls = new HBox({
+      spacing: LAYOUT.BUTTON_ROW_SPACING,
+      children: [pinButton, compareButton, removePinButton, pinLegend],
+    });
 
     const logXCheckbox = new Checkbox(graphView.logXProperty, new Text(labels.logXStringProperty, textOptions), {
       accessibleName: labels.logXStringProperty,
@@ -464,9 +475,12 @@ export class DataLabScreenView extends ScreenView {
       },
     );
     const logNotice = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH });
-    const scales = new HBox({ spacing: 8, children: [logXCheckbox, logYCheckbox, rectangleCheckbox, logNotice] });
+    const scales = new HBox({
+      spacing: LAYOUT.STACK_SPACING,
+      children: [logXCheckbox, logYCheckbox, rectangleCheckbox, logNotice],
+    });
 
-    const statusText = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH + 40 });
+    const statusText = new Text("", { ...textOptions, maxWidth: PLOT_WIDTH + LAYOUT.STATUS_EXTRA_WIDTH });
     const liveStatus = new Node({ tagName: "div", ariaRole: "status" });
     liveStatus.setPDOMAttribute("aria-live", "polite");
     liveStatus.setPDOMAttribute("aria-atomic", "true");
@@ -482,7 +496,7 @@ export class DataLabScreenView extends ScreenView {
         }
       },
     );
-    const messageText = new Text("", { font: NOTE_FONT, fill: DataLabColors.textColorProperty, maxWidth: PLOT_WIDTH });
+    const messageText = new Text("", { font: FONTS.NOTE, fill: DataLabColors.textColorProperty, maxWidth: PLOT_WIDTH });
     Multilink.multilink(
       [this.messageProperty, labels.dragHintStringProperty, labels.localOnlyStringProperty],
       (message, dragHint, localOnly) => {
@@ -492,7 +506,7 @@ export class DataLabScreenView extends ScreenView {
 
     const belowPlots = new VBox({
       align: "left",
-      spacing: 8,
+      spacing: LAYOUT.STACK_SPACING,
       children: [rangeRow, rangeButtons, statusText, messageText, pinControls, scales],
       left: PLOT_LEFT - 30,
       top: residualPlot.y + RESIDUAL_PLOT_HEIGHT + 42,
@@ -506,7 +520,7 @@ export class DataLabScreenView extends ScreenView {
       emptyLabel?: typeof labels.unweightedStringProperty,
     ) => {
       const select = document.createElement("select");
-      select.style.cssText = `width: ${SELECT_WIDTH}px; box-sizing: border-box; font: ${HTML_FONT}; padding: 2px;`;
+      select.style.cssText = `width: ${SELECT_WIDTH}px; box-sizing: border-box; font: ${HTML_CONTROL_FONT}; padding: 2px;`;
       accessibleName.link((name) => select.setAttribute("aria-label", name));
       select.addEventListener("change", () => {
         property.value = Number(select.value);
@@ -553,9 +567,9 @@ export class DataLabScreenView extends ScreenView {
         value,
         createNode: () =>
           new Text(modelNames[value], {
-            font: CONTROL_FONT,
+            font: FONTS.CONTROL,
             fill: LIGHT_SURFACE_TEXT_FILL,
-            maxWidth: SELECT_WIDTH - 40,
+            maxWidth: SELECT_WIDTH - LAYOUT.COMBO_LABEL_INSET,
           }),
         accessibleName: modelNames[value],
       })),
@@ -563,22 +577,22 @@ export class DataLabScreenView extends ScreenView {
       {
         ...DATA_LAB_COMBO_BOX_OPTIONS,
         preferredWidth: SELECT_WIDTH,
-        xMargin: 8,
-        yMargin: 4,
+        xMargin: LAYOUT.BUTTON_X_MARGIN,
+        yMargin: LAYOUT.COMBO_Y_MARGIN,
         accessibleName: labels.fitModelStringProperty,
       },
     );
 
     const heading = (string: typeof labels.xAxisStringProperty) =>
       new Text(string, {
-        font: new PhetFont({ size: CONTROL_FONT_SIZE, weight: "bold" }),
+        font: FONTS.CONTROL_BOLD,
         fill: DataLabColors.textColorProperty,
-        maxWidth: RIGHT_COLUMN_WIDTH - 30,
+        maxWidth: RIGHT_COLUMN_WIDTH - LAYOUT.PANEL_TITLE_INSET,
       });
     const controlPanel = new DataLabPanel(
       new VBox({
         align: "left",
-        spacing: 6,
+        spacing: LAYOUT.BUTTON_ROW_SPACING,
         children: [
           heading(labels.xAxisStringProperty),
           xSelect,
@@ -611,7 +625,11 @@ export class DataLabScreenView extends ScreenView {
     const rightColumn = new VBox({
       align: "left",
       spacing: COLUMN_SPACING,
-      children: [controlPanel, resultsPanel, new HBox({ spacing: 6, children: [copyButton, exportGraphButton] })],
+      children: [
+        controlPanel,
+        resultsPanel,
+        new HBox({ spacing: LAYOUT.BUTTON_ROW_SPACING, children: [copyButton, exportGraphButton] }),
+      ],
       top: bounds.minY + SCREEN_VIEW_MARGIN,
     });
     rightColumn.left = bounds.maxX - SCREEN_VIEW_MARGIN - RIGHT_COLUMN_WIDTH;

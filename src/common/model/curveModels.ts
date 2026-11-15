@@ -1,3 +1,4 @@
+import { CURVE_FIT } from "../../DataLabConstants.js";
 import { exponentialValue } from "./exponentialFit.js";
 import { fitProfile, type Profile } from "./profiledFit.js";
 
@@ -24,10 +25,6 @@ type Coordinates = {
   readonly yScale: number;
 };
 
-const RATE_LIMIT = 350;
-const MAX_FREQUENCY_SEEDS = 512;
-const rateSeeds = [-100, -40, -15, -6, -2, -0.5, -0.1, 0.1, 0.5, 2, 6, 15, 40, 100];
-
 function normalizedPhase(phase: number): number {
   return Math.atan2(Math.sin(phase), Math.cos(phase));
 }
@@ -35,8 +32,8 @@ function normalizedPhase(phase: number): number {
 function exponentialProfile(model: "exponentialBackground" | "inverseExponential", c: Coordinates): Profile {
   return {
     basis: (x, [rate]) => [Math.exp((rate as number) * x - Math.max(0, rate as number)), 1],
-    bounds: [[-RATE_LIMIT, RATE_LIMIT]],
-    seeds: rateSeeds.map((rate) => [rate]),
+    bounds: [[-CURVE_FIT.RATE_LIMIT, CURVE_FIT.RATE_LIMIT]],
+    seeds: CURVE_FIT.RATE_SEEDS.map((rate) => [rate]),
     steps: [0.09],
     report: ([amplitude, background], [rate]) => {
       const k = (rate as number) / c.span;
@@ -54,8 +51,8 @@ function powerProfile(model: "power" | "powerNoOffset", c: Coordinates): Profile
       const power = Math.exp((exponent as number) * x - Math.max(0, exponent as number));
       return background ? [power, 1] : [power];
     },
-    bounds: [[-RATE_LIMIT, RATE_LIMIT]],
-    seeds: (background ? rateSeeds : [0, ...rateSeeds]).map((exponent) => [exponent]),
+    bounds: [[-CURVE_FIT.RATE_LIMIT, CURVE_FIT.RATE_LIMIT]],
+    seeds: (background ? CURVE_FIT.RATE_SEEDS : [0, ...CURVE_FIT.RATE_SEEDS]).map((exponent) => [exponent]),
     steps: [0.09],
     report: ([amplitude, offset], [rate]) => {
       const exponent = (rate as number) / c.span;
@@ -99,7 +96,10 @@ function harmonicProfile(model: "sine" | "dampedSine" | "sineSeries", c: Coordin
     .map((x, i) => x - (sorted[i] as number))
     .sort((a, b) => a - b);
   const medianGap = gaps[Math.floor(gaps.length / 2)] as number;
-  const maxFrequency = Math.min(Math.PI / (medianGap * harmonics.length), (MAX_FREQUENCY_SEEDS * Math.PI) / 2);
+  const maxFrequency = Math.min(
+    Math.PI / (medianGap * harmonics.length),
+    (CURVE_FIT.MAX_FREQUENCY_SEEDS * Math.PI) / 2,
+  );
   const frequencyCount = Math.max(8, Math.ceil(maxFrequency / (Math.PI / 2)));
   const frequencies = Array.from({ length: frequencyCount }, (_, i) => ((i + 0.5) * maxFrequency) / frequencyCount);
   return {
@@ -116,7 +116,7 @@ function harmonicProfile(model: "sine" | "dampedSine" | "sineSeries", c: Coordin
     bounds: damped
       ? [
           [0, maxFrequency],
-          [-RATE_LIMIT, RATE_LIMIT],
+          [-CURVE_FIT.RATE_LIMIT, CURVE_FIT.RATE_LIMIT],
         ]
       : [[0, maxFrequency]],
     seeds: damped

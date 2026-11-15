@@ -6,15 +6,10 @@
  */
 
 import { Range } from "scenerystack/dot";
+import { AXIS } from "../../DataLabConstants.js";
 
 /** Zoom per wheel notch: the visible span shrinks or grows by this factor. */
-export const WHEEL_ZOOM_FACTOR = 1.1;
-
-/**
- * Narrowest span worth showing, relative to the size of the numbers on the axis.
- * Below it, neighbouring tick values are no longer distinct doubles.
- */
-const MIN_RELATIVE_SPAN = 1e-9;
+export const WHEEL_ZOOM_FACTOR = AXIS.WHEEL_ZOOM_FACTOR;
 
 /**
  * Scales a range by `factor` (below 1 zooms in) keeping the value `anchor` at the
@@ -26,7 +21,7 @@ export function zoomAbout(range: Range, factor: number, anchor: number): Range {
   const max = anchor + (range.max - anchor) * factor;
   const span = max - min;
   const magnitude = Math.max(Math.abs(min), Math.abs(max));
-  if (!(Number.isFinite(min) && Number.isFinite(max)) || span <= magnitude * MIN_RELATIVE_SPAN || span <= 0) {
+  if (!(Number.isFinite(min) && Number.isFinite(max)) || span <= magnitude * AXIS.MIN_RELATIVE_SPAN || span <= 0) {
     return range;
   }
   return new Range(min, max);
@@ -45,7 +40,7 @@ export function paddedRange(min: number, max: number, fraction: number): Range {
     return new Range(0, 1);
   }
   if (min === max) {
-    const halfWidth = min === 0 ? 1 : Math.abs(min) * 0.5;
+    const halfWidth = min === 0 ? 1 : Math.abs(min) * AXIS.ZERO_SPAN_HALF_FRACTION;
     return new Range(min - halfWidth, max + halfWidth);
   }
   const padding = (max - min) * fraction;

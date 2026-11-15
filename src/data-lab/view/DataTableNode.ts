@@ -19,28 +19,13 @@ import { DOM, Node } from "scenerystack/scenery";
 import { canDeleteColumn, columnLabel, type Dataset } from "../../common/model/Dataset.js";
 import { splitHeader, tokenize } from "../../common/model/parseTable.js";
 import DataLabColors from "../../DataLabColors.js";
+import { TABLE } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
 import { editCalculatedColumn } from "./editCalculatedColumn.js";
 import { fillPattern } from "./fillPattern.js";
 
-const FONT = "12px Arial, sans-serif";
-const MIN_CELL_WIDTH = 68;
-
-/** Room kept for the vertical scrollbar when sizing columns to fill the table. */
-const SCROLLBAR_ALLOWANCE = 18;
-const MARKER_WIDTH = 22;
-const ROW_NUMBER_WIDTH = 30;
-const REMOVE_BUTTON_WIDTH = 23;
-const EXCLUSION_WIDTH = 48;
-const CELL_PADDING = "3px 5px";
 const CHECK_MARK = "✓";
-
-/**
- * Rows drawn in the table. Every row is still plotted and fitted; a table this
- * long is not read row by row, and building more inputs would stall the page.
- */
-const MAX_RENDERED_ROWS = 1000;
 
 export type DataTableNodeOptions = {
   readonly width: number;
@@ -60,7 +45,7 @@ export class DataTableNode extends Node {
     const tbody = document.createElement("tbody");
     table.append(caption, thead, tbody);
     wrapper.appendChild(table);
-    table.style.cssText = `border-collapse: collapse; font: ${FONT};`;
+    table.style.cssText = `border-collapse: collapse; font: ${TABLE.FONT};`;
     caption.style.cssText =
       "position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap;";
 
@@ -85,13 +70,13 @@ export class DataTableNode extends Node {
 
     // Columns share the table's width; with many columns they keep a readable
     // minimum and the table scrolls sideways.
-    let cellWidth = MIN_CELL_WIDTH;
+    let cellWidth: number = TABLE.MIN_CELL_WIDTH;
 
     const styleInput = (input: HTMLInputElement, bold: boolean) => {
       input.type = "text";
       input.autocomplete = "off";
       input.spellcheck = false;
-      input.style.cssText = `width: ${cellWidth}px; box-sizing: border-box; border: none; background: transparent; font: ${FONT}; padding: ${CELL_PADDING}; text-align: ${bold ? "center" : "right"}; ${bold ? "font-weight: bold;" : ""}`;
+      input.style.cssText = `width: ${cellWidth}px; box-sizing: border-box; border: none; background: transparent; font: ${TABLE.FONT}; padding: ${TABLE.CELL_PADDING}; text-align: ${bold ? "center" : "right"}; ${bold ? "font-weight: bold;" : ""}`;
     };
 
     const focusCell = (rowIndex: number, columnIndex: number) => {
@@ -108,19 +93,24 @@ export class DataTableNode extends Node {
       button.textContent = "×";
       button.title = name;
       button.setAttribute("aria-label", name);
-      button.style.cssText = `min-width: ${REMOVE_BUTTON_WIDTH}px; font: ${FONT};`;
+      button.style.cssText = `min-width: ${TABLE.REMOVE_BUTTON_WIDTH}px; font: ${TABLE.FONT};`;
       button.addEventListener("click", action);
       return button;
     };
 
     const build = (dataset: Dataset) => {
       const colors = css();
-      const rowCount = Math.min(dataset.rowCount, MAX_RENDERED_ROWS);
+      const rowCount = Math.min(dataset.rowCount, TABLE.MAX_RENDERED_ROWS);
       const available =
-        options.width - MARKER_WIDTH - ROW_NUMBER_WIDTH - REMOVE_BUTTON_WIDTH - EXCLUSION_WIDTH - SCROLLBAR_ALLOWANCE;
+        options.width -
+        TABLE.MARKER_WIDTH -
+        TABLE.ROW_NUMBER_WIDTH -
+        TABLE.REMOVE_BUTTON_WIDTH -
+        TABLE.EXCLUSION_WIDTH -
+        TABLE.SCROLLBAR_ALLOWANCE;
       cellWidth = Math.max(
-        MIN_CELL_WIDTH,
-        Math.floor(available / Math.max(dataset.columns.length, 1)) - REMOVE_BUTTON_WIDTH,
+        TABLE.MIN_CELL_WIDTH,
+        Math.floor(available / Math.max(dataset.columns.length, 1)) - TABLE.REMOVE_BUTTON_WIDTH,
       );
       wrapper.style.background = colors.surface;
       wrapper.style.border = `1px solid ${colors.grid}`;
@@ -141,20 +131,20 @@ export class DataTableNode extends Node {
       markerHeader.title = labels.inFitStringProperty.value;
       markerHeader.setAttribute("aria-label", labels.inFitStringProperty.value);
       markerHeader.scope = "col";
-      markerHeader.style.cssText = `${headerCellStyle} width: ${MARKER_WIDTH}px;`;
+      markerHeader.style.cssText = `${headerCellStyle} width: ${TABLE.MARKER_WIDTH}px;`;
       const numberHeader = document.createElement("th");
       numberHeader.textContent = "#";
       numberHeader.title = labels.rowStringProperty.value;
       numberHeader.setAttribute("aria-label", labels.rowStringProperty.value);
       numberHeader.scope = "col";
-      numberHeader.style.cssText = `${headerCellStyle} width: ${ROW_NUMBER_WIDTH}px;`;
+      numberHeader.style.cssText = `${headerCellStyle} width: ${TABLE.ROW_NUMBER_WIDTH}px;`;
       const actionsHeader = document.createElement("th");
       actionsHeader.scope = "col";
       actionsHeader.style.cssText = headerCellStyle;
       actionsHeader.setAttribute("aria-label", labels.deleteRowStringProperty.value);
       const exclusionHeader = document.createElement("th");
       exclusionHeader.scope = "col";
-      exclusionHeader.style.cssText = `${headerCellStyle} min-width: ${EXCLUSION_WIDTH}px;`;
+      exclusionHeader.style.cssText = `${headerCellStyle} min-width: ${TABLE.EXCLUSION_WIDTH}px;`;
       exclusionHeader.textContent = labels.excludeStringProperty.value;
       headerRow.append(markerHeader, numberHeader, actionsHeader, exclusionHeader);
 
@@ -211,7 +201,7 @@ export class DataTableNode extends Node {
         const number = document.createElement("th");
         number.scope = "row";
         number.textContent = String(r + 1);
-        number.style.cssText = `${cellStyle} text-align: right; padding: ${CELL_PADDING}; font-weight: normal; color: ${colors.text}; background: ${colors.header};`;
+        number.style.cssText = `${cellStyle} text-align: right; padding: ${TABLE.CELL_PADDING}; font-weight: normal; color: ${colors.text}; background: ${colors.header};`;
         const actions = document.createElement("td");
         actions.style.cssText = cellStyle;
         actions.appendChild(

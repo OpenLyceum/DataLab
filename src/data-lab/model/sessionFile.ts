@@ -1,9 +1,10 @@
 import type { Dataset } from "../../common/model/Dataset.js";
 import type { XRange } from "../../common/model/includedRows.js";
 import { FitModel, type FitModelValue } from "../../common/model/leastSquares.js";
+import { SESSION } from "../../DataLabConstants.js";
 import { decodeDataset } from "./datasetStorage.js";
 
-export const SESSION_FILE_NAME = "data-lab.session.json";
+export { SESSION_FILE_NAME } from "../../DataLabConstants.js";
 
 export type FitSettings = {
   readonly uncertaintyColumn: number;
@@ -77,7 +78,7 @@ function decodeRun(value: unknown): Session | null {
   return { ...file, dataset };
 }
 
-export const MAX_RUN_NAME_LENGTH = 80;
+export const MAX_RUN_NAME_LENGTH = SESSION.MAX_RUN_NAME_LENGTH;
 
 export function encodeSession(session: RunSession): string {
   return JSON.stringify({ ...session, format: "openlyceum-data-lab", version: 2 });

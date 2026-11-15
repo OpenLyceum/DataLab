@@ -26,25 +26,10 @@ import { ChartFrameNode } from "../../common/view/ChartFrameNode.js";
 import { installGraphGestures } from "../../common/view/GraphGestures.js";
 import { PointsCanvasNode } from "../../common/view/PointsCanvasNode.js";
 import DataLabColors from "../../DataLabColors.js";
+import { PLOT } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
 import type { GraphView } from "./GraphView.js";
-
-/** Samples along the fitted curve; plenty for a parabola across a few hundred pixels. */
-const CURVE_SAMPLES = 120;
-const MAX_CURVE_SAMPLES = 4096;
-const SAMPLES_PER_CYCLE = 24;
-
-/** Height of the strip under the plot that takes x-axis gestures: the gap down to the residual graph. */
-const X_AXIS_STRIP_HEIGHT = 20;
-
-/** Half-width of the invisible strip that makes an edge easy to grab, mouse or finger. */
-const HANDLE_HALF_WIDTH = 11;
-const HANDLE_GRIP_RADIUS = 6;
-
-/** Keyboard steps. */
-const FINE_STEP_FRACTION = 0.01;
-const PAGE_POINTS = 10;
 
 export type PlotNodeOptions = {
   readonly viewWidth: number;
@@ -61,7 +46,7 @@ export class PlotNode extends Node {
     const { viewWidth, viewHeight } = options;
     const a11y = StringManager.getInstance().getDataLabA11yStrings();
 
-    const frame = new ChartFrameNode({ viewWidth, viewHeight, xAxisStripHeight: X_AXIS_STRIP_HEIGHT });
+    const frame = new ChartFrameNode({ viewWidth, viewHeight, xAxisStripHeight: PLOT.X_AXIS_STRIP_HEIGHT });
     const xAxisRangeProperty = graphView.xAxisRangeProperty;
     this.frame = frame;
     frame.chartRectangle.cursor = "crosshair";
@@ -70,13 +55,13 @@ export class PlotNode extends Node {
     const points = new PointsCanvasNode(chartTransform, viewWidth, viewHeight);
     const fitCurve = new Path(null, {
       stroke: DataLabColors.fitLineColorProperty,
-      lineWidth: 2,
+      lineWidth: PLOT.CURVE_LINE_WIDTH,
       pickable: false,
     });
     const pinnedCurve = new Path(null, {
       stroke: DataLabColors.pinnedFitColorProperty,
-      lineWidth: 2,
-      lineDash: [6, 4],
+      lineWidth: PLOT.CURVE_LINE_WIDTH,
+      lineDash: [...PLOT.PINNED_DASH],
       pickable: false,
     });
     const band = new Rectangle(0, 0, 1, viewHeight, {
@@ -132,11 +117,11 @@ export class PlotNode extends Node {
         accessibleName,
         accessibleHelpText: a11y.controls.rangeHelpStringProperty,
         children: [
-          new Rectangle(-HANDLE_HALF_WIDTH, 0, 2 * HANDLE_HALF_WIDTH, viewHeight, { fill: "transparent" }),
+          new Rectangle(-PLOT.HANDLE_HALF_WIDTH, 0, 2 * PLOT.HANDLE_HALF_WIDTH, viewHeight, { fill: "transparent" }),
           new Line(0, 0, 0, viewHeight, { stroke: DataLabColors.fitLineColorProperty, lineWidth: 2 }),
-          new Path(Shape.regularPolygon(3, HANDLE_GRIP_RADIUS).transformed(Matrix3.rotation2(Math.PI / 2)), {
+          new Path(Shape.regularPolygon(3, PLOT.HANDLE_GRIP_RADIUS).transformed(Matrix3.rotation2(Math.PI / 2)), {
             fill: DataLabColors.fitLineColorProperty,
-            y: HANDLE_GRIP_RADIUS - 2,
+            y: PLOT.HANDLE_GRIP_RADIUS - 2,
           }),
         ],
       });
@@ -184,7 +169,7 @@ export class PlotNode extends Node {
               const previous = values.findLastIndex((value) => value < current);
               return previous === -1 ? first : (values[Math.max(previous + count + 1, 0)] as number);
             };
-            const fineStep = xAxisRangeProperty.value.getLength() * FINE_STEP_FRACTION;
+            const fineStep = xAxisRangeProperty.value.getLength() * PLOT.FINE_STEP_FRACTION;
             switch (keysPressed) {
               case "arrowLeft":
                 moveTo(stepPoints(-1));
@@ -199,10 +184,10 @@ export class PlotNode extends Node {
                 moveTo(fromX(toX(current) + fineStep));
                 break;
               case "pageDown":
-                moveTo(stepPoints(-PAGE_POINTS));
+                moveTo(stepPoints(-PLOT.PAGE_POINTS));
                 break;
               case "pageUp":
-                moveTo(stepPoints(PAGE_POINTS));
+                moveTo(stepPoints(PLOT.PAGE_POINTS));
                 break;
               case "home":
                 moveTo(first);
@@ -320,7 +305,10 @@ export class PlotNode extends Node {
 
     const appendCurveBranch = (shape: Shape, fit: FitSuccess, min: number, max: number) => {
       const cycles = (highestAngularFrequency(fit) / (2 * Math.PI)) * (fromX(max) - fromX(min));
-      const samples = Math.min(MAX_CURVE_SAMPLES, Math.max(CURVE_SAMPLES, Math.ceil(SAMPLES_PER_CYCLE * cycles)));
+      const samples = Math.min(
+        PLOT.MAX_CURVE_SAMPLES,
+        Math.max(PLOT.CURVE_SAMPLES, Math.ceil(PLOT.SAMPLES_PER_CYCLE * cycles)),
+      );
       let started = false;
       for (let k = 0; k <= samples; k++) {
         const x = k === samples ? max : min + ((max - min) * k) / samples;

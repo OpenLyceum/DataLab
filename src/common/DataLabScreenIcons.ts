@@ -8,12 +8,12 @@
 import { Node, Rectangle } from "scenerystack/scenery";
 import { ScreenIcon } from "scenerystack/sim";
 import DataLabColors from "../DataLabColors.js";
-
-const W = 548;
-const H = 373;
+import { SCREEN_ICONS } from "../DataLabConstants.js";
 
 function background(): Rectangle {
-  return new Rectangle(0, 0, W, H, { fill: DataLabColors.backgroundColorProperty });
+  return new Rectangle(0, 0, SCREEN_ICONS.WIDTH, SCREEN_ICONS.HEIGHT, {
+    fill: DataLabColors.backgroundColorProperty,
+  });
 }
 
 function iconFrom(content: Node): ScreenIcon {

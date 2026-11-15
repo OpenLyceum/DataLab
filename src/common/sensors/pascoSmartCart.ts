@@ -1,9 +1,9 @@
 /** Smart Cart position channel, per PASCO's pasco_python device library and datasheet. */
+import { PASCO } from "../../DataLabConstants.js";
+
 const POSITION_SERVICE = "4a5c0003-0000-0000-0000-5c1e741f1c00";
 const POSITION_WRITE = "4a5c0003-0002-0000-0000-5c1e741f1c00";
 const POSITION_NOTIFY = "4a5c0003-0003-0000-0000-5c1e741f1c00";
-const METRES_PER_COUNT = 0.09895 / 816;
-const RESPONSE_TIMEOUT_MS = 2000;
 
 interface CartCharacteristic extends EventTarget {
   readonly value?: DataView;
@@ -43,7 +43,7 @@ export function decodePositionDelta(value: DataView): number | null {
   if (value.getUint8(1) !== 0 || value.byteLength !== 5) {
     throw new Error("PASCO rejected the position request or sent an invalid sample");
   }
-  return value.getInt16(3, true) * METRES_PER_COUNT;
+  return value.getInt16(3, true) * PASCO.METRES_PER_COUNT;
 }
 
 export async function connectSmartCart(signal: AbortSignal, disconnected: () => void) {
@@ -99,7 +99,7 @@ export async function connectSmartCart(signal: AbortSignal, disconnected: () => 
               fail(error);
             }
           };
-          const timeout = setTimeout(() => fail(new Error("PASCO sample timed out")), RESPONSE_TIMEOUT_MS);
+          const timeout = setTimeout(() => fail(new Error("PASCO sample timed out")), PASCO.RESPONSE_TIMEOUT_MS);
           if (signal.aborted) {
             onAbort();
             return;

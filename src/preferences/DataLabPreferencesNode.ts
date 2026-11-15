@@ -7,10 +7,10 @@
  */
 
 import { Text, VBox } from "scenerystack/scenery";
-import { PhetFont } from "scenerystack/scenery-phet";
 import { Checkbox } from "scenerystack/sun";
 import type { Tandem } from "scenerystack/tandem";
 import DataLabColors from "../DataLabColors.js";
+import { FONTS, PREFERENCES_LAYOUT } from "../DataLabConstants.js";
 import DataLabNamespace from "../DataLabNamespace.js";
 import { StringManager } from "../i18n/StringManager.js";
 import type { DataLabPreferencesModel } from "./DataLabPreferencesModel.js";
@@ -23,27 +23,27 @@ export class DataLabPreferencesNode extends VBox {
     // colors (readable on white in both default and projector profiles), not textColorProperty
     // (which is near-white in default mode and would be invisible on the white dialog).
     const header = new Text(prefStrings.titleStringProperty, {
-      font: new PhetFont({ size: 18, weight: "bold" }),
+      font: FONTS.PREFERENCES_TITLE,
       fill: DataLabColors.controlSurfaceTextColorProperty,
     });
 
     const showResidualsCheckbox = new Checkbox(
       preferencesModel.showResidualsProperty,
       new Text(prefStrings.showResidualsStringProperty, {
-        font: new PhetFont(14),
+        font: FONTS.PREFERENCES_LABEL,
         fill: DataLabColors.controlSurfaceTextColorProperty,
       }),
       {
         checkboxColor: DataLabColors.controlSurfaceTextColorProperty,
         checkboxColorBackground: DataLabColors.controlSurfaceColorProperty,
-        spacing: 8,
+        spacing: PREFERENCES_LAYOUT.CONTROL_SPACING,
         ...(tandem && { tandem: tandem.createTandem("showResidualsCheckbox") }),
       },
     );
 
     super({
       align: "left",
-      spacing: 12,
+      spacing: PREFERENCES_LAYOUT.SECTION_SPACING,
       children: [header, showResidualsCheckbox],
     });
   }

@@ -10,6 +10,7 @@
  * only when the delimiter is not itself a comma).
  */
 
+import { PARSE } from "../../DataLabConstants.js";
 import { type Column, createColumn, type Dataset, parseNumber } from "./Dataset.js";
 
 export type Delimiter = "," | "\t" | ";";
@@ -25,9 +26,6 @@ export type ParseOptions = {
   /** Name for a column with no header, from its 1-based position. */
   readonly defaultColumnName?: (position: number) => string;
 };
-
-/** Lines sampled when guessing the delimiter. */
-const SNIFF_LINE_COUNT = 20;
 
 /** Tried in this order; the first that splits every sampled line the same way wins. */
 const DELIMITERS: readonly Delimiter[] = ["\t", ";", ","];
@@ -95,7 +93,7 @@ export function sniffDelimiter(text: string): Delimiter {
   const lines = text
     .split("\n")
     .filter((line) => line.trim() !== "")
-    .slice(0, SNIFF_LINE_COUNT);
+    .slice(0, PARSE.SNIFF_LINE_COUNT);
   let best: Delimiter = ",";
   let bestTotal = 0;
   for (const delimiter of DELIMITERS) {

@@ -23,14 +23,10 @@ import {
   type FitSuccess,
   requiresPositiveX,
 } from "../../common/model/leastSquares.js";
+import { FIT_DISPLAY } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel, PinnedFit } from "../model/DataLabModel.js";
 import { fillPattern } from "./fillPattern.js";
-
-/** Below this many points left over (n − p), the uncertainties come with a caution. */
-const CAUTION_DEGREES_OF_FREEDOM = 3;
-
-const R_SQUARED_DIGITS = 5;
 
 export type FitText = {
   /** "Using 31 of 61 rows · Time from 0 s to 1.5 s". */
@@ -146,7 +142,9 @@ function successLines(fit: FitSuccess, xUnit: string, yUnit: string, labels: Lab
   }
   if (fit.rSquared !== null) {
     lines.push(
-      fillPattern(labels.rSquaredStringProperty.value, { value: formatSignificant(fit.rSquared, R_SQUARED_DIGITS) }),
+      fillPattern(labels.rSquaredStringProperty.value, {
+        value: formatSignificant(fit.rSquared, FIT_DISPLAY.R_SQUARED_DIGITS),
+      }),
     );
   }
   lines.push(fillPattern(labels.pointsUsedStringProperty.value, { count: fit.count }));
@@ -160,7 +158,7 @@ function cautionText(fit: FitSuccess, labels: Labels): string {
     }
     return labels.noScatterStringProperty.value;
   }
-  return fit.degreesOfFreedom < CAUTION_DEGREES_OF_FREEDOM ? labels.fewPointsStringProperty.value : "";
+  return fit.degreesOfFreedom < FIT_DISPLAY.CAUTION_DEGREES_OF_FREEDOM ? labels.fewPointsStringProperty.value : "";
 }
 
 function failureLine(fit: FitFailure, labels: Labels): string {

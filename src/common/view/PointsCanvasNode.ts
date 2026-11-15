@@ -10,12 +10,10 @@ import type { ChartTransform } from "scenerystack/bamboo";
 import { Bounds2 } from "scenerystack/dot";
 import { CanvasNode } from "scenerystack/scenery";
 import DataLabColors from "../../DataLabColors.js";
+import { POINTS } from "../../DataLabConstants.js";
 import { validUncertainty } from "../model/leastSquares.js";
 
 import { axisCoordinate } from "./axisRange.js";
-
-const POINT_RADIUS = 3;
-const HOLLOW_LINE_WIDTH = 1;
 
 export class PointsCanvasNode extends CanvasNode {
   private logX = false;
@@ -56,7 +54,7 @@ export class PointsCanvasNode extends CanvasNode {
   public override paintCanvas(context: CanvasRenderingContext2D): void {
     const { minX, minY, maxX, maxY } = this.canvasBounds;
     const count = Math.min(this.xs.length, this.ys.length);
-    context.lineWidth = HOLLOW_LINE_WIDTH;
+    context.lineWidth = POINTS.HOLLOW_LINE_WIDTH;
     context.fillStyle = DataLabColors.pointColorProperty.value.toCSS();
     context.strokeStyle = DataLabColors.excludedPointColorProperty.value.toCSS();
     for (let i = 0; i < count; i++) {
@@ -77,24 +75,24 @@ export class PointsCanvasNode extends CanvasNode {
         context.beginPath();
         context.moveTo(viewX, top);
         context.lineTo(viewX, bottom);
-        context.moveTo(viewX - POINT_RADIUS, top);
-        context.lineTo(viewX + POINT_RADIUS, top);
+        context.moveTo(viewX - POINTS.RADIUS, top);
+        context.lineTo(viewX + POINTS.RADIUS, top);
         if (Number.isFinite(lower)) {
-          context.moveTo(viewX - POINT_RADIUS, bottom);
-          context.lineTo(viewX + POINT_RADIUS, bottom);
+          context.moveTo(viewX - POINTS.RADIUS, bottom);
+          context.lineTo(viewX + POINTS.RADIUS, bottom);
         }
         context.stroke();
       }
       if (
-        viewX < minX - POINT_RADIUS ||
-        viewX > maxX + POINT_RADIUS ||
-        viewY < minY - POINT_RADIUS ||
-        viewY > maxY + POINT_RADIUS
+        viewX < minX - POINTS.RADIUS ||
+        viewX > maxX + POINTS.RADIUS ||
+        viewY < minY - POINTS.RADIUS ||
+        viewY > maxY + POINTS.RADIUS
       ) {
         continue;
       }
       context.beginPath();
-      context.arc(viewX, viewY, POINT_RADIUS, 0, 2 * Math.PI);
+      context.arc(viewX, viewY, POINTS.RADIUS, 0, 2 * Math.PI);
       if (this.included[i]) {
         context.fill();
       } else {

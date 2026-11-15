@@ -1,6 +1,6 @@
 /** QR operations shared by linear and nonlinear least squares. */
 
-const RANK_TOLERANCE = 1e-10;
+import { QR } from "../../DataLabConstants.js";
 
 /**
  * Householder QR of the n×p matrix `a` (row-major, modified in place) applied to
@@ -89,7 +89,7 @@ export function isRankDeficient(r: number[][], p: number): boolean {
     largest = Math.max(largest, Math.abs((r[j] as number[])[j] as number));
   }
   for (let j = 0; j < p; j++) {
-    if (Math.abs((r[j] as number[])[j] as number) <= RANK_TOLERANCE * largest) {
+    if (Math.abs((r[j] as number[])[j] as number) <= QR.RANK_TOLERANCE * largest) {
       return true;
     }
   }

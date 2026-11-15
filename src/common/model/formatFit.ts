@@ -6,6 +6,7 @@
  * SceneryStack imports.
  */
 
+import { FORMAT } from "../../DataLabConstants.js";
 import { FitModel, type FitModelValue, MODEL_POWERS } from "./leastSquares.js";
 
 /** Parameter symbols, in the order the fit reports its parameters. */
@@ -109,16 +110,6 @@ export function fitParameterUnit(model: FitModelValue, index: number, xUnit: str
   }
 }
 
-/** Significant figures kept in an uncertainty, and so in the value it belongs to. */
-const UNCERTAINTY_DIGITS = 2;
-
-/** Significant figures for a value shown without an uncertainty. */
-const DEFAULT_DIGITS = 4;
-
-/** Outside this range of magnitudes a number is written with a power of ten. */
-const FIXED_MIN = 1e-4;
-const FIXED_MAX = 1e6;
-
 const SUPERSCRIPTS: Record<string, string> = {
   "-": "⁻",
   "0": "⁰",
@@ -163,11 +154,11 @@ function exponentOf(value: number): number {
 }
 
 function usesFixed(magnitude: number): boolean {
-  return magnitude === 0 || (magnitude >= FIXED_MIN && magnitude < FIXED_MAX);
+  return magnitude === 0 || (magnitude >= FORMAT.FIXED_MIN && magnitude < FORMAT.FIXED_MAX);
 }
 
 /** A number to `digits` significant figures: "0.9012", or "3.161×10⁻¹⁵" when very large or small. */
-export function formatSignificant(value: number, digits = DEFAULT_DIGITS): string {
+export function formatSignificant(value: number, digits: number = FORMAT.DEFAULT_DIGITS): string {
   if (!Number.isFinite(value)) {
     return "—";
   }
@@ -193,7 +184,7 @@ export function formatWithUncertainty(value: number, standardError: number | nul
   }
   const leading = Math.max(Math.abs(value), standardError);
   if (usesFixed(leading)) {
-    const decimals = UNCERTAINTY_DIGITS - 1 - exponentOf(standardError);
+    const decimals = FORMAT.UNCERTAINTY_DIGITS - 1 - exponentOf(standardError);
     if (decimals >= 0) {
       return `${value.toFixed(Math.min(decimals, 100))} ± ${standardError.toFixed(Math.min(decimals, 100))}`;
     }
@@ -202,7 +193,7 @@ export function formatWithUncertainty(value: number, standardError: number | nul
   }
   const exponent = exponentOf(leading);
   const factor = 10 ** exponent;
-  const decimals = Math.max(0, UNCERTAINTY_DIGITS - 1 - exponentOf(standardError / factor));
+  const decimals = Math.max(0, FORMAT.UNCERTAINTY_DIGITS - 1 - exponentOf(standardError / factor));
   return `(${(value / factor).toFixed(decimals)} ± ${(standardError / factor).toFixed(decimals)})×10${superscript(exponent)}`;
 }
 

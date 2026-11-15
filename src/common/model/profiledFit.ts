@@ -1,3 +1,4 @@
+import { PROFILED_FIT } from "../../DataLabConstants.js";
 import { backSubstitute, householder, isRankDeficient, standardErrorsOf } from "./qr.js";
 
 export type Basis = (x: number, shape: readonly number[]) => readonly number[];
@@ -11,10 +12,6 @@ export type Profile = {
 
 type Point = { readonly x: number; readonly y: number; readonly weight: number };
 type Trial = { readonly shape: readonly number[]; readonly linear: number[]; readonly cost: number };
-
-const SEED_SAMPLE_SIZE = 256;
-const REFINEMENT_STARTS = 4;
-const MAX_ITERATIONS = 160;
 
 function dot(a: readonly number[], b: readonly number[]): number {
   return a.reduce((sum, value, i) => sum + value * (b[i] as number), 0);
@@ -61,7 +58,7 @@ function refine(profile: Profile, points: readonly Point[], seed: Trial): Trial 
     const plus = score(profile, points, shifted(step));
     simplex.push(Number.isFinite(plus.cost) ? plus : score(profile, points, shifted(-step)));
   }
-  for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+  for (let iteration = 0; iteration < PROFILED_FIT.MAX_ITERATIONS; iteration++) {
     simplex.sort((a, b) => a.cost - b.cost);
     const best = simplex[0] as Trial;
     const worst = simplex[dimensions] as Trial;
@@ -108,7 +105,7 @@ function differences(
   wrap?: (index: number, difference: number) => number,
 ): number[][] {
   const columns = values.map((value, j) => {
-    const step = 1e-6 * Math.max(1, Math.abs(value));
+    const step = PROFILED_FIT.DERIVATIVE_STEP * Math.max(1, Math.abs(value));
     const plus = evaluate(values.map((v, k) => (j === k ? v + step : v)));
     const minus = evaluate(values.map((v, k) => (j === k ? v - step : v)));
     return plus.map((p, i) => {
@@ -126,19 +123,20 @@ export function fitProfile(
   phaseIndices: readonly number[],
 ) {
   let sample = points;
-  if (points.length > SEED_SAMPLE_SIZE) {
+  if (points.length > PROFILED_FIT.SEED_SAMPLE_SIZE) {
     const sorted = [...points].sort((a, b) => a.x - b.x);
     // Sample across x, with deterministic jitter to avoid a new regular Nyquist limit.
-    sample = Array.from({ length: SEED_SAMPLE_SIZE }, (_, i) => {
-      const stride = sorted.length / SEED_SAMPLE_SIZE;
-      const fraction = ((i * 89) % SEED_SAMPLE_SIZE) / SEED_SAMPLE_SIZE;
+    sample = Array.from({ length: PROFILED_FIT.SEED_SAMPLE_SIZE }, (_, i) => {
+      const stride = sorted.length / PROFILED_FIT.SEED_SAMPLE_SIZE;
+      const fraction =
+        ((i * PROFILED_FIT.SEED_STRIDE_SCRAMBLE) % PROFILED_FIT.SEED_SAMPLE_SIZE) / PROFILED_FIT.SEED_SAMPLE_SIZE;
       return sorted[Math.floor((i + fraction) * stride)] as Point;
     });
   }
   const seeds = profile.seeds.map((seed) => score(profile, sample, seed)).sort((a, b) => a.cost - b.cost);
   const starts: Trial[] = [];
   for (const seed of seeds) {
-    if (!Number.isFinite(seed.cost) || starts.length === REFINEMENT_STARTS) {
+    if (!Number.isFinite(seed.cost) || starts.length === PROFILED_FIT.REFINEMENT_STARTS) {
       break;
     }
     if (

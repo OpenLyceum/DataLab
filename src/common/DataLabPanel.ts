@@ -29,7 +29,7 @@ import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
 import type { Node } from "scenerystack/scenery";
 import { Panel, type PanelOptions } from "scenerystack/sun";
 import DataLabColors from "../DataLabColors.js";
-import { PANEL_CORNER_RADIUS } from "../DataLabConstants.js";
+import { PANEL, PANEL_CORNER_RADIUS } from "../DataLabConstants.js";
 
 export type DataLabPanelOptions = PanelOptions;
 
@@ -40,8 +40,8 @@ export class DataLabPanel extends Panel {
         fill: DataLabColors.panelBackgroundColorProperty,
         stroke: DataLabColors.panelBorderColorProperty,
         cornerRadius: PANEL_CORNER_RADIUS,
-        xMargin: 12,
-        yMargin: 10,
+        xMargin: PANEL.X_MARGIN,
+        yMargin: PANEL.Y_MARGIN,
       },
       providedOptions,
     );

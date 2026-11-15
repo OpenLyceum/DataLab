@@ -1,8 +1,5 @@
+import { EXPONENTIAL_FIT } from "../../DataLabConstants.js";
 import { backSubstitute, householder, isRankDeficient, standardErrorsOf } from "./qr.js";
-
-const MAX_ITERATIONS = 80;
-const STEP_TOLERANCE = 1e-10;
-const COST_TOLERANCE = 1e-13;
 
 type Parameters = readonly [amplitude: number, rate: number];
 
@@ -37,7 +34,9 @@ function estimateRate(t: readonly number[], normalizedY: readonly number[]): num
     covariance += dx * (magnitude - meanLog);
     varianceX += dx * (x - meanX);
   }
-  return varianceX > 0 ? Math.max(-300, Math.min(300, covariance / varianceX)) : 0;
+  return varianceX > 0
+    ? Math.max(-EXPONENTIAL_FIT.LOG_RATE_CLAMP, Math.min(EXPONENTIAL_FIT.LOG_RATE_CLAMP, covariance / varianceX))
+    : 0;
 }
 
 function refine(
@@ -48,9 +47,9 @@ function refine(
 ): [Parameters, number] | null {
   let parameters = initial;
   let cost = score(parameters);
-  let damping = 1e-3;
+  let damping: number = EXPONENTIAL_FIT.INITIAL_DAMPING;
   let converged = false;
-  for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+  for (let iteration = 0; iteration < EXPONENTIAL_FIT.MAX_ITERATIONS; iteration++) {
     const design = jacobian(parameters);
     const rhs = residualVector(parameters);
     const aNorm = design.reduce((norm, row) => Math.hypot(norm, row[0] as number), 0);
@@ -67,26 +66,30 @@ function refine(
     const da = (delta[0] as number) / aNorm;
     const dk = (delta[1] as number) / kNorm;
     const candidate: Parameters = [parameters[0] + da, parameters[1] + dk];
-    const trial = Math.abs(candidate[1]) <= 350 ? score(candidate) : Infinity;
+    const trial = Math.abs(candidate[1]) <= EXPONENTIAL_FIT.RATE_LIMIT ? score(candidate) : Infinity;
     const smallStep =
-      Math.abs(da) <= STEP_TOLERANCE * Math.max(Math.abs(parameters[0]), Number.MIN_VALUE) &&
-      Math.abs(dk) <= STEP_TOLERANCE * (1 + Math.abs(parameters[1]));
+      Math.abs(da) <= EXPONENTIAL_FIT.STEP_TOLERANCE * Math.max(Math.abs(parameters[0]), Number.MIN_VALUE) &&
+      Math.abs(dk) <= EXPONENTIAL_FIT.STEP_TOLERANCE * (1 + Math.abs(parameters[1]));
     if (trial <= cost) {
-      const smallChange = cost - trial <= COST_TOLERANCE * Math.max(cost, Number.EPSILON);
+      const smallChange = cost - trial <= EXPONENTIAL_FIT.COST_TOLERANCE * Math.max(cost, Number.EPSILON);
       parameters = candidate;
       cost = trial;
       if (smallStep || smallChange) {
         converged = true;
         break;
       }
-      damping = Math.max(1e-12, damping / 3);
+      damping = Math.max(EXPONENTIAL_FIT.MIN_DAMPING, damping / EXPONENTIAL_FIT.DAMPING_DECREASE);
     } else {
       // A rounded-away improvement at an otherwise stationary solution.
-      if (smallStep && damping <= 1 && trial - cost <= COST_TOLERANCE * Math.max(cost, Number.EPSILON)) {
+      if (
+        smallStep &&
+        damping <= 1 &&
+        trial - cost <= EXPONENTIAL_FIT.COST_TOLERANCE * Math.max(cost, Number.EPSILON)
+      ) {
         converged = true;
         break;
       }
-      damping *= 10;
+      damping *= EXPONENTIAL_FIT.DAMPING_INCREASE;
     }
   }
 

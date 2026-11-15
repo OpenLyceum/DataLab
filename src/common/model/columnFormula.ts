@@ -1,3 +1,5 @@
+import { FORMULA } from "../../DataLabConstants.js";
+
 /** A small arithmetic grammar for calculated columns. Column references are C1, C2, … */
 type Expression = (read: (index: number) => number) => number;
 
@@ -13,7 +15,7 @@ const FUNCTIONS = new Map<string, (value: number) => number>([
 
 export function compileFormula(formula: string, columnCount: number): Expression | null {
   // Limit recursion and parsing work for pasted input.
-  if (formula.length > 256) {
+  if (formula.length > FORMULA.MAX_LENGTH) {
     return null;
   }
   const tokens = formula.match(/\d+(?:\.\d*)?(?:e[+-]?\d+)?|\.\d+(?:e[+-]?\d+)?|[a-z][a-z0-9]*|[^\s]/gi) ?? [];

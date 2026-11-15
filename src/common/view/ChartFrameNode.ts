@@ -13,24 +13,9 @@ import { Range } from "scenerystack/dot";
 import { Shape } from "scenerystack/kite";
 import { Orientation } from "scenerystack/phet-core";
 import { Node, Rectangle, Text } from "scenerystack/scenery";
-import { PhetFont } from "scenerystack/scenery-phet";
 import DataLabColors from "../../DataLabColors.js";
+import { CHART_FRAME, CHART_TICKS, FONTS } from "../../DataLabConstants.js";
 import { axisValue } from "./axisRange.js";
-
-const LABEL_FONT = new PhetFont(12);
-const TICK_FONT = new PhetFont(10);
-const GRID_LINE_WIDTH = 0.5;
-
-/** Width of the strip left of the plot that holds the y tick labels and takes y-axis gestures. */
-const Y_AXIS_STRIP_WIDTH = 56;
-
-/** Distance from the plot edge to the axis labels. */
-const X_LABEL_OFFSET = 20;
-const Y_LABEL_OFFSET = 46;
-
-/** Largest number of decimals a tick label is printed with before falling back to general notation. */
-const MAX_TICK_DECIMALS = 6;
-const MAX_FIXED_TICK = 1e6;
 
 function formatLogTick(coordinate: number, step: number): string {
   const digits = Math.min(15, Math.max(3, decimalsFor(step) + 2));
@@ -39,14 +24,21 @@ function formatLogTick(coordinate: number, step: number): string {
 }
 
 /** A "nice" tick spacing (1, 2 or 5 × 10ⁿ) giving about `targetTicks` ticks across `span`. */
-export function niceStep(span: number, targetTicks = 5): number {
+export function niceStep(span: number, targetTicks: number = CHART_TICKS.DEFAULT_DIVISIONS): number {
   if (!(span > 0 && Number.isFinite(span))) {
     return 1;
   }
   const raw = span / targetTicks;
   const magnitude = 10 ** Math.floor(Math.log10(raw));
   const normalized = raw / magnitude;
-  const nice = normalized < 1.5 ? 1 : normalized < 3.5 ? 2 : normalized < 7.5 ? 5 : 10;
+  const nice =
+    normalized < CHART_TICKS.UNIT_THRESHOLD
+      ? 1
+      : normalized < CHART_TICKS.TWO_THRESHOLD
+        ? 2
+        : normalized < CHART_TICKS.FIVE_THRESHOLD
+          ? 5
+          : 10;
   return nice * magnitude;
 }
 
@@ -57,10 +49,10 @@ export function decimalsFor(step: number): number {
 
 function formatTick(value: number, step: number): string {
   const decimals = decimalsFor(step);
-  if (decimals <= MAX_TICK_DECIMALS && Math.abs(value) < MAX_FIXED_TICK) {
+  if (decimals <= CHART_FRAME.MAX_TICK_DECIMALS && Math.abs(value) < CHART_FRAME.MAX_FIXED_TICK) {
     return value.toFixed(decimals);
   }
-  return String(Number(value.toPrecision(MAX_TICK_DECIMALS)));
+  return String(Number(value.toPrecision(CHART_FRAME.MAX_TICK_DECIMALS)));
 }
 
 export type ChartFrameNodeOptions = {
@@ -100,7 +92,7 @@ export class ChartFrameNode extends Node {
     const { viewWidth, viewHeight } = options;
     this.viewWidth = viewWidth;
     this.viewHeight = viewHeight;
-    this.yTickCount = options.yTickCount ?? 5;
+    this.yTickCount = options.yTickCount ?? CHART_FRAME.DEFAULT_Y_TICK_COUNT;
 
     const chartTransform = new ChartTransform({
       viewWidth,
@@ -115,13 +107,13 @@ export class ChartFrameNode extends Node {
       stroke: DataLabColors.panelBorderColorProperty,
     });
 
-    const gridOptions = { stroke: DataLabColors.chartGridColorProperty, lineWidth: GRID_LINE_WIDTH };
+    const gridOptions = { stroke: DataLabColors.chartGridColorProperty, lineWidth: CHART_FRAME.GRID_LINE_WIDTH };
     // Ticks and their labels straddle the plot edge; they must not take pointer
     // events meant for the plot or the axis strips.
     const tickOptions = { edge: "min" as const, stroke: DataLabColors.textColorProperty, pickable: false };
     const createLabel = (step: () => number, log: () => boolean) => (value: number) =>
       new Text(log() ? formatLogTick(value, step()) : formatTick(value, step()), {
-        font: TICK_FONT,
+        font: FONTS.TICK_LABEL,
         fill: DataLabColors.textColorProperty,
       });
 
@@ -159,7 +151,7 @@ export class ChartFrameNode extends Node {
       fill: "transparent",
       cursor: "ew-resize",
     });
-    this.yAxisStrip = new Rectangle(-Y_AXIS_STRIP_WIDTH, 0, Y_AXIS_STRIP_WIDTH, viewHeight, {
+    this.yAxisStrip = new Rectangle(-CHART_FRAME.Y_AXIS_STRIP_WIDTH, 0, CHART_FRAME.Y_AXIS_STRIP_WIDTH, viewHeight, {
       fill: "transparent",
       cursor: "ns-resize",
     });
@@ -175,9 +167,13 @@ export class ChartFrameNode extends Node {
       this.yAxisStrip,
     ];
 
-    this.xAxisLabel = new Text("", { font: LABEL_FONT, fill: DataLabColors.textColorProperty, maxWidth: viewWidth });
+    this.xAxisLabel = new Text("", {
+      font: FONTS.AXIS_LABEL,
+      fill: DataLabColors.textColorProperty,
+      maxWidth: viewWidth,
+    });
     this.yAxisLabel = new Text("", {
-      font: LABEL_FONT,
+      font: FONTS.AXIS_LABEL,
       fill: DataLabColors.textColorProperty,
       rotation: -Math.PI / 2,
       maxWidth: viewHeight,
@@ -187,8 +183,8 @@ export class ChartFrameNode extends Node {
 
     const layout = () => {
       this.xAxisLabel.centerX = viewWidth / 2;
-      this.xAxisLabel.top = viewHeight + X_LABEL_OFFSET;
-      this.yAxisLabel.centerX = -Y_LABEL_OFFSET;
+      this.xAxisLabel.top = viewHeight + CHART_FRAME.X_LABEL_OFFSET;
+      this.yAxisLabel.centerX = -CHART_FRAME.Y_LABEL_OFFSET;
       this.yAxisLabel.centerY = viewHeight / 2;
     };
     layout();
@@ -208,7 +204,7 @@ export class ChartFrameNode extends Node {
     const refreshY = logY !== this.logY;
     this.logX = logX;
     this.logY = logY;
-    const xStep = niceStep(xRange.getLength(), 6);
+    const xStep = niceStep(xRange.getLength(), CHART_FRAME.X_TICK_COUNT);
     const yStep = niceStep(yRange.getLength(), this.yTickCount);
     const invalidateX = refreshX || (logX && xStep !== this.xStep);
     const invalidateY = refreshY || (logY && yStep !== this.yStep);
