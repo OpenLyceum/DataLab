@@ -88,6 +88,7 @@ function countOutsideQuotes(line: string, delimiter: Delimiter): number {
 /**
  * Guesses the delimiter from the first lines: the first candidate that appears the
  * same non-zero number of times on every line, else the most frequent one.
+ * @internal Exported for unit tests; not part of the application API.
  */
 export function sniffDelimiter(text: string): Delimiter {
   const lines = text
