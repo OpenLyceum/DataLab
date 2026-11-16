@@ -324,8 +324,8 @@ export const PROFILED_FIT = {
 
 /** Curve-model seed search limits. */
 export const CURVE_FIT = {
-  /** Initial simplex step for power-law shape parameters (dimensionless). */
-  POWER_STEP: 0.09,
+  /** Shared initial simplex step for exponential/power rate shape parameters (dimensionless). */
+  SIMPLEX_STEP: 0.09,
   /** Pole seed distances in normalized x coordinates. */
   POLE_OFFSETS: [0.0001, 0.001, 0.01, 0.03, 0.07, 0.15, 0.3, 0.6, 1, 2, 5, 15, 50] as const,
   /** Maximum internal-gap seeds (count). */
@@ -356,8 +356,6 @@ export const CURVE_FIT = {
   GAUSSIAN_LOG_WIDTH_STEP: 0.2,
   /** Maximum normalized prediction error when restoring parameter units. */
   PREDICTION_TOLERANCE: 1e-6,
-  /** Cap on |rate| / |decay| shape parameters (1/data-x). */
-  RATE_LIMIT: 350,
   MAX_FREQUENCY_SEEDS: 512,
   RATE_SEEDS: [-100, -40, -15, -6, -2, -0.5, -0.1, 0.1, 0.5, 2, 6, 15, 40, 100] as const,
 } as const;

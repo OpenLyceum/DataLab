@@ -1,4 +1,4 @@
-import { CURVE_FIT } from "../../DataLabConstants.js";
+import { CURVE_FIT, EXPONENTIAL_FIT } from "../../DataLabConstants.js";
 import { exponentialValue } from "./exponentialFit.js";
 import { fitProfile, type Profile } from "./profiledFit.js";
 
@@ -32,9 +32,9 @@ function normalizedPhase(phase: number): number {
 function exponentialProfile(model: "exponentialBackground" | "inverseExponential", c: Coordinates): Profile {
   return {
     basis: (x, [rate]) => [Math.exp((rate as number) * x - Math.max(0, rate as number)), 1],
-    bounds: [[-CURVE_FIT.RATE_LIMIT, CURVE_FIT.RATE_LIMIT]],
+    bounds: [[-EXPONENTIAL_FIT.RATE_LIMIT, EXPONENTIAL_FIT.RATE_LIMIT]],
     seeds: CURVE_FIT.RATE_SEEDS.map((rate) => [rate]),
-    steps: [CURVE_FIT.POWER_STEP],
+    steps: [CURVE_FIT.SIMPLEX_STEP],
     report: ([amplitude, background], [rate]) => {
       const k = (rate as number) / c.span;
       const a = exponentialValue((amplitude as number) * c.yScale, -k * c.origin - Math.max(0, rate as number));
@@ -51,9 +51,9 @@ function powerProfile(model: "power" | "powerNoOffset", c: Coordinates): Profile
       const power = Math.exp((exponent as number) * x - Math.max(0, exponent as number));
       return background ? [power, 1] : [power];
     },
-    bounds: [[-CURVE_FIT.RATE_LIMIT, CURVE_FIT.RATE_LIMIT]],
+    bounds: [[-EXPONENTIAL_FIT.RATE_LIMIT, EXPONENTIAL_FIT.RATE_LIMIT]],
     seeds: (background ? CURVE_FIT.RATE_SEEDS : [0, ...CURVE_FIT.RATE_SEEDS]).map((exponent) => [exponent]),
-    steps: [CURVE_FIT.POWER_STEP],
+    steps: [CURVE_FIT.SIMPLEX_STEP],
     report: ([amplitude, offset], [rate]) => {
       const exponent = (rate as number) / c.span;
       const a = exponentialValue((amplitude as number) * c.yScale, -exponent * c.origin - Math.max(0, rate as number));
@@ -116,7 +116,7 @@ function harmonicProfile(model: "sine" | "dampedSine" | "sineSeries", c: Coordin
     bounds: damped
       ? [
           [0, maxFrequency],
-          [-CURVE_FIT.RATE_LIMIT, CURVE_FIT.RATE_LIMIT],
+          [-EXPONENTIAL_FIT.RATE_LIMIT, EXPONENTIAL_FIT.RATE_LIMIT],
         ]
       : [[0, maxFrequency]],
     seeds: damped
