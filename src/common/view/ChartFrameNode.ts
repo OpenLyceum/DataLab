@@ -9,7 +9,7 @@
  */
 
 import { ChartRectangle, ChartTransform, GridLineSet, TickLabelSet, TickMarkSet } from "scenerystack/bamboo";
-import { Range } from "scenerystack/dot";
+import { Range, toFixed } from "scenerystack/dot";
 import { Shape } from "scenerystack/kite";
 import { Orientation } from "scenerystack/phet-core";
 import { Node, Rectangle, Text } from "scenerystack/scenery";
@@ -50,7 +50,7 @@ function decimalsFor(step: number): number {
 function formatTick(value: number, step: number): string {
   const decimals = decimalsFor(step);
   if (decimals <= CHART_FRAME.MAX_TICK_DECIMALS && Math.abs(value) < CHART_FRAME.MAX_FIXED_TICK) {
-    return value.toFixed(decimals);
+    return toFixed(value, decimals);
   }
   return String(Number(value.toPrecision(CHART_FRAME.MAX_TICK_DECIMALS)));
 }

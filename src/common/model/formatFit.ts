@@ -6,6 +6,7 @@
  * SceneryStack imports.
  */
 
+import { toFixed } from "scenerystack/dot";
 import { FORMAT } from "../../DataLabConstants.js";
 import { FitModel, type FitModelValue, MODEL_POWERS } from "./leastSquares.js";
 
@@ -165,10 +166,10 @@ export function formatSignificant(value: number, digits: number = FORMAT.DEFAULT
   }
   if (usesFixed(Math.abs(value))) {
     const decimals = Math.max(0, digits - 1 - exponentOf(value));
-    return value.toFixed(Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS));
+    return toFixed(value, Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS));
   }
   const exponent = exponentOf(value);
-  return `${(value / 10 ** exponent).toFixed(digits - 1)}×10${superscript(exponent)}`;
+  return `${toFixed(value / 10 ** exponent, digits - 1)}×10${superscript(exponent)}`;
 }
 
 /**
@@ -184,15 +185,15 @@ export function formatWithUncertainty(value: number, standardError: number | nul
   if (usesFixed(leading)) {
     const decimals = FORMAT.UNCERTAINTY_DIGITS - 1 - exponentOf(standardError);
     if (decimals >= 0) {
-      return `${value.toFixed(Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS))} ± ${standardError.toFixed(Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS))}`;
+      return `${toFixed(value, Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS))} ± ${toFixed(standardError, Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS))}`;
     }
     const step = 10 ** -decimals;
-    return `${(Math.round(value / step) * step).toFixed(0)} ± ${(Math.round(standardError / step) * step).toFixed(0)}`;
+    return `${toFixed(Math.round(value / step) * step, 0)} ± ${toFixed(Math.round(standardError / step) * step, 0)}`;
   }
   const exponent = exponentOf(leading);
   const factor = 10 ** exponent;
   const decimals = Math.max(0, FORMAT.UNCERTAINTY_DIGITS - 1 - exponentOf(standardError / factor));
-  return `(${(value / factor).toFixed(decimals)} ± ${(standardError / factor).toFixed(decimals)})×10${superscript(exponent)}`;
+  return `(${toFixed(value / factor, decimals)} ± ${toFixed(standardError / factor, decimals)})×10${superscript(exponent)}`;
 }
 
 /** Appends a unit to a formatted number, or returns the number alone when there is no unit. */
