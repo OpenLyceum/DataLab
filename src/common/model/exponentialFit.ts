@@ -141,7 +141,7 @@ export function solveExponential(xs: readonly number[], ys: readonly number[], u
   const logRate = estimateRate(t, normalizedY);
   let parameters = seed(0);
   let cost = score(parameters);
-  for (const rate of [logRate, -1, 1, -5, 5]) {
+  for (const rate of [logRate, ...EXPONENTIAL_FIT.RATE_SEEDS]) {
     const candidate = seed(rate);
     const candidateCost = score(candidate);
     if (candidateCost < cost) {

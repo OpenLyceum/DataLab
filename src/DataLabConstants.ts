@@ -96,6 +96,16 @@ export const PANEL = {
 
 /** Screen-layout spacings and button chrome (px). */
 export const LAYOUT = {
+  /** Additional graph top inset (px). */
+  PLOT_TOP_OFFSET: 4,
+  /** Width of each rectangle y-range input (px). */
+  Y_RANGE_FIELD_WIDTH: 56,
+  /** Significant figures displayed in range inputs. */
+  RANGE_FIELD_DIGITS: 6,
+  /** Graph footer inset from plot left (px). */
+  GRAPH_FOOTER_LEFT_INSET: 30,
+  /** Gap below residual plot before footer (px). */
+  GRAPH_FOOTER_TOP_GAP: 42,
   /** Gap between buttons in a row. */
   BUTTON_ROW_SPACING: 6,
   /** Gap between stacked control groups. */
@@ -239,6 +249,8 @@ export const FIT_DISPLAY = {
 
 /** Numeric formatting for fit parameters. */
 export const FORMAT = {
+  /** ECMAScript Number.toFixed precision limit (digits). */
+  MAX_FIXED_DECIMALS: 100,
   /** Significant figures kept in an uncertainty (and so in its value). */
   UNCERTAINTY_DIGITS: 2,
   /** Significant figures for a value shown without an uncertainty. */
@@ -282,6 +294,8 @@ export const QR = {
 
 /** Nonlinear exponential least-squares solver. */
 export const EXPONENTIAL_FIT = {
+  /** Extra exponential rate seeds in normalized x coordinates. */
+  RATE_SEEDS: [-1, 1, -5, 5] as const,
   MAX_ITERATIONS: 80,
   STEP_TOLERANCE: 1e-10,
   COST_TOLERANCE: 1e-13,
@@ -297,6 +311,8 @@ export const EXPONENTIAL_FIT = {
 
 /** Profiled (separable) nonlinear curve fits. */
 export const PROFILED_FIT = {
+  /** Absolute simplex convergence tolerance in normalized shape coordinates. */
+  SIMPLEX_TOLERANCE: 1e-9,
   SEED_SAMPLE_SIZE: 256,
   REFINEMENT_STARTS: 4,
   MAX_ITERATIONS: 160,
@@ -308,6 +324,38 @@ export const PROFILED_FIT = {
 
 /** Curve-model seed search limits. */
 export const CURVE_FIT = {
+  /** Initial simplex step for power-law shape parameters (dimensionless). */
+  POWER_STEP: 0.09,
+  /** Pole seed distances in normalized x coordinates. */
+  POLE_OFFSETS: [0.0001, 0.001, 0.01, 0.03, 0.07, 0.15, 0.3, 0.6, 1, 2, 5, 15, 50] as const,
+  /** Maximum internal-gap seeds (count). */
+  MAX_GAP_SEEDS: 128,
+  /** Initial pole step in normalized x coordinates. */
+  POLE_STEP: 0.001,
+  /** Minimum sinusoidal frequency seeds (count). */
+  MIN_FREQUENCY_SEEDS: 8,
+  /** Damped-sine decay seeds in normalized x coordinates. */
+  DAMPING_SEEDS: [0, 2, 8, -2] as const,
+  /** Initial damped-sine decay step (dimensionless). */
+  DAMPING_STEP: 0.3,
+  /** Gaussian centre seeds in normalized x coordinates. */
+  GAUSSIAN_CENTRES: [-0.3, 0, 0.15, 0.3, 0.5, 0.7, 0.85, 1, 1.3] as const,
+  /** Gaussian centre lower bound in normalized x coordinates. */
+  GAUSSIAN_CENTRE_MIN: -20,
+  /** Gaussian centre upper bound in normalized x coordinates. */
+  GAUSSIAN_CENTRE_MAX: 21,
+  /** Log Gaussian width lower bound (dimensionless). */
+  GAUSSIAN_LOG_WIDTH_MIN: -25,
+  /** Log Gaussian width upper bound (dimensionless). */
+  GAUSSIAN_LOG_WIDTH_MAX: 5,
+  /** Gaussian width seeds in normalized x coordinates. */
+  GAUSSIAN_WIDTHS: [0.01, 0.025, 0.06, 0.15, 0.35, 0.8, 1.8] as const,
+  /** Gaussian centre simplex step in normalized x coordinates. */
+  GAUSSIAN_CENTRE_STEP: 0.025,
+  /** Log Gaussian width simplex step (dimensionless). */
+  GAUSSIAN_LOG_WIDTH_STEP: 0.2,
+  /** Maximum normalized prediction error when restoring parameter units. */
+  PREDICTION_TOLERANCE: 1e-6,
   /** Cap on |rate| / |decay| shape parameters (1/data-x). */
   RATE_LIMIT: 350,
   MAX_FREQUENCY_SEEDS: 512,
@@ -316,6 +364,8 @@ export const CURVE_FIT = {
 
 /** PASCO Smart Cart capture (SI where noted). */
 export const PASCO = {
+  /** Wall-clock milliseconds in one second. */
+  MILLISECONDS_PER_SECOND: 1000,
   /** Sample interval while streaming (ms of wall clock). */
   INTERVAL_MS: 100,
   /** Hard cap on streamed samples in one capture. */
@@ -326,6 +376,16 @@ export const PASCO = {
   RESPONSE_TIMEOUT_MS: 2000,
   /** Truncate Bluetooth device names for the UI (characters). */
   DEVICE_NAME_MAX_LENGTH: 80,
+} as const;
+
+/** Settings for data-lab/view/PlotNode.ts. Layout lengths are in px; counts and ratios are dimensionless. */
+export const PLOT_NODE_SETTINGS = {
+  HANDLE_LINE_WIDTH: 2,
+} as const;
+
+/** Component dimensions in px; ratios and control steps are dimensionless; precision counts digits. */
+export const FIT_TEXT_SETTINGS = {
+  RMSE_FORMAT_SIGNIFICANT_DIGITS: 3, // digits
 } as const;
 
 DataLabNamespace.register("DataLabConstants", {

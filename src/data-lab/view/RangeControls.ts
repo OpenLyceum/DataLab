@@ -18,11 +18,8 @@ import { FONTS, HTML_CONTROL_FONT, LAYOUT, RANGE_FIELD_WIDTH } from "../../DataL
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
 
-/** Width of the two y fields of a rectangle selection (px). */
-const Y_FIELD_WIDTH = 56;
-
-/** Significant figures a bound is shown with. */
-const FIELD_DIGITS = 6;
+const Y_FIELD_WIDTH = LAYOUT.Y_RANGE_FIELD_WIDTH;
+const FIELD_DIGITS = LAYOUT.RANGE_FIELD_DIGITS;
 
 export function createRangeControls(model: DataLabModel): Node {
   const labels = StringManager.getInstance().getLabels();

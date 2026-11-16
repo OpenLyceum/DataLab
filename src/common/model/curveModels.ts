@@ -34,7 +34,7 @@ function exponentialProfile(model: "exponentialBackground" | "inverseExponential
     basis: (x, [rate]) => [Math.exp((rate as number) * x - Math.max(0, rate as number)), 1],
     bounds: [[-CURVE_FIT.RATE_LIMIT, CURVE_FIT.RATE_LIMIT]],
     seeds: CURVE_FIT.RATE_SEEDS.map((rate) => [rate]),
-    steps: [0.09],
+    steps: [CURVE_FIT.POWER_STEP],
     report: ([amplitude, background], [rate]) => {
       const k = (rate as number) / c.span;
       const a = exponentialValue((amplitude as number) * c.yScale, -k * c.origin - Math.max(0, rate as number));
@@ -53,7 +53,7 @@ function powerProfile(model: "power" | "powerNoOffset", c: Coordinates): Profile
     },
     bounds: [[-CURVE_FIT.RATE_LIMIT, CURVE_FIT.RATE_LIMIT]],
     seeds: (background ? CURVE_FIT.RATE_SEEDS : [0, ...CURVE_FIT.RATE_SEEDS]).map((exponent) => [exponent]),
-    steps: [0.09],
+    steps: [CURVE_FIT.POWER_STEP],
     report: ([amplitude, offset], [rate]) => {
       const exponent = (rate as number) / c.span;
       const a = exponentialValue((amplitude as number) * c.yScale, -exponent * c.origin - Math.max(0, rate as number));
@@ -70,15 +70,15 @@ function reciprocalProfile(model: "shiftedInverse" | "shiftedInverseSquare", c: 
     return { centre: (left + right) / 2, width: right - left };
   });
   gaps.sort((a, b) => b.width - a.width);
-  const offsets = [0.0001, 0.001, 0.01, 0.03, 0.07, 0.15, 0.3, 0.6, 1, 2, 5, 15, 50];
+  const offsets = CURVE_FIT.POLE_OFFSETS;
   return {
     basis: (x, [pole]) => [1 / (x - (pole as number)) ** power, 1],
     bounds: [[-Infinity, Infinity]],
     seeds: [
       ...offsets.flatMap((offset) => [[-offset], [1 + offset]]),
-      ...gaps.slice(0, 128).map(({ centre }) => [centre]),
+      ...gaps.slice(0, CURVE_FIT.MAX_GAP_SEEDS).map(({ centre }) => [centre]),
     ],
-    steps: [0.001],
+    steps: [CURVE_FIT.POLE_STEP],
     report: ([amplitude, offset], [pole]) => [
       (amplitude as number) * c.yScale * c.span ** power,
       c.origin + (pole as number) * c.span,
@@ -100,7 +100,7 @@ function harmonicProfile(model: "sine" | "dampedSine" | "sineSeries", c: Coordin
     Math.PI / (medianGap * harmonics.length),
     (CURVE_FIT.MAX_FREQUENCY_SEEDS * Math.PI) / 2,
   );
-  const frequencyCount = Math.max(8, Math.ceil(maxFrequency / (Math.PI / 2)));
+  const frequencyCount = Math.max(CURVE_FIT.MIN_FREQUENCY_SEEDS, Math.ceil(maxFrequency / (Math.PI / 2)));
   const frequencies = Array.from({ length: frequencyCount }, (_, i) => ((i + 0.5) * maxFrequency) / frequencyCount);
   return {
     basis: (x, [frequency, rate]) => {
@@ -120,9 +120,9 @@ function harmonicProfile(model: "sine" | "dampedSine" | "sineSeries", c: Coordin
         ]
       : [[0, maxFrequency]],
     seeds: damped
-      ? frequencies.flatMap((frequency) => [0, 2, 8, -2].map((rate) => [frequency, rate]))
+      ? frequencies.flatMap((frequency) => CURVE_FIT.DAMPING_SEEDS.map((rate) => [frequency, rate]))
       : frequencies.map((frequency) => [frequency]),
-    steps: damped ? [maxFrequency / frequencyCount / 2, 0.3] : [maxFrequency / frequencyCount / 2],
+    steps: damped ? [maxFrequency / frequencyCount / 2, CURVE_FIT.DAMPING_STEP] : [maxFrequency / frequencyCount / 2],
     report: (linear, [frequency, rate]) => {
       const omega = (frequency as number) / c.span;
       const k = damped ? (rate as number) / c.span : 0;
@@ -152,20 +152,18 @@ function gaussianProfile(c: Coordinates): Profile {
       high = i;
     }
   }
-  const centres = [c.x[low] as number, c.x[high] as number, -0.3, 0, 0.15, 0.3, 0.5, 0.7, 0.85, 1, 1.3];
+  const centres = [c.x[low] as number, c.x[high] as number, ...CURVE_FIT.GAUSSIAN_CENTRES];
   return {
     basis: (x, [centre, logWidth]) => [
       Math.exp(-0.5 * ((x - (centre as number)) / Math.exp(logWidth as number)) ** 2),
       1,
     ],
     bounds: [
-      [-20, 21],
-      [-25, 5],
+      [CURVE_FIT.GAUSSIAN_CENTRE_MIN, CURVE_FIT.GAUSSIAN_CENTRE_MAX],
+      [CURVE_FIT.GAUSSIAN_LOG_WIDTH_MIN, CURVE_FIT.GAUSSIAN_LOG_WIDTH_MAX],
     ],
-    seeds: centres.flatMap((centre) =>
-      [0.01, 0.025, 0.06, 0.15, 0.35, 0.8, 1.8].map((width) => [centre, Math.log(width)]),
-    ),
-    steps: [0.025, 0.2],
+    seeds: centres.flatMap((centre) => CURVE_FIT.GAUSSIAN_WIDTHS.map((width) => [centre, Math.log(width)])),
+    steps: [CURVE_FIT.GAUSSIAN_CENTRE_STEP, CURVE_FIT.GAUSSIAN_LOG_WIDTH_STEP],
     report: ([amplitude, offset], [centre, logWidth]) => [
       (amplitude as number) * c.yScale,
       c.origin + (centre as number) * c.span,
@@ -239,7 +237,11 @@ export function solveCurve(
   const predicted = xs.map((value) => evaluateCurve(model, fit.parameters, value));
   // Reject a coefficient conversion that loses the fitted curve (e.g. an
   // amplitude that underflows when extrapolated all the way to x = 0).
-  if (predicted.some((value, i) => !(Math.abs(value / yScale - (fit.predicted[i] as number)) <= 1e-6))) {
+  if (
+    predicted.some(
+      (value, i) => !(Math.abs(value / yScale - (fit.predicted[i] as number)) <= CURVE_FIT.PREDICTION_TOLERANCE),
+    )
+  ) {
     return null;
   }
   return {

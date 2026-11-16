@@ -1,3 +1,4 @@
+import { FIT_TEXT_SETTINGS } from "../../DataLabConstants.js";
 /**
  * fitText.ts
  *
@@ -131,7 +132,9 @@ function successLines(fit: FitSuccess, xUnit: string, yUnit: string, labels: Lab
   });
   if (fit.rmse !== null) {
     lines.push(
-      fillPattern(labels.rmseStringProperty.value, { value: withUnit(formatSignificant(fit.rmse, 3), yUnit) }),
+      fillPattern(labels.rmseStringProperty.value, {
+        value: withUnit(formatSignificant(fit.rmse, FIT_TEXT_SETTINGS.RMSE_FORMAT_SIGNIFICANT_DIGITS), yUnit),
+      }),
     );
   }
   if (fit.reducedChiSquared !== null) {

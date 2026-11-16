@@ -1,3 +1,4 @@
+import { PLOT_NODE_SETTINGS } from "../../DataLabConstants.js";
 /**
  * PlotNode.ts
  *
@@ -150,7 +151,10 @@ export class PlotNode extends Node {
         accessibleHelpText: a11y.controls.rangeHelpStringProperty,
         children: [
           new Rectangle(-PLOT.HANDLE_HALF_WIDTH, 0, 2 * PLOT.HANDLE_HALF_WIDTH, viewHeight, { fill: "transparent" }),
-          new Line(0, 0, 0, viewHeight, { stroke: DataLabColors.fitLineColorProperty, lineWidth: 2 }),
+          new Line(0, 0, 0, viewHeight, {
+            stroke: DataLabColors.fitLineColorProperty,
+            lineWidth: PLOT_NODE_SETTINGS.HANDLE_LINE_WIDTH,
+          }),
           new Path(Shape.regularPolygon(3, PLOT.HANDLE_GRIP_RADIUS).transformed(Matrix3.rotation2(Math.PI / 2)), {
             fill: DataLabColors.fitLineColorProperty,
             y: PLOT.HANDLE_GRIP_RADIUS - 2,

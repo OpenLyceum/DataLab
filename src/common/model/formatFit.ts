@@ -165,7 +165,7 @@ export function formatSignificant(value: number, digits: number = FORMAT.DEFAULT
   }
   if (usesFixed(Math.abs(value))) {
     const decimals = Math.max(0, digits - 1 - exponentOf(value));
-    return value.toFixed(Math.min(decimals, 100));
+    return value.toFixed(Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS));
   }
   const exponent = exponentOf(value);
   return `${(value / 10 ** exponent).toFixed(digits - 1)}×10${superscript(exponent)}`;
@@ -184,7 +184,7 @@ export function formatWithUncertainty(value: number, standardError: number | nul
   if (usesFixed(leading)) {
     const decimals = FORMAT.UNCERTAINTY_DIGITS - 1 - exponentOf(standardError);
     if (decimals >= 0) {
-      return `${value.toFixed(Math.min(decimals, 100))} ± ${standardError.toFixed(Math.min(decimals, 100))}`;
+      return `${value.toFixed(Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS))} ± ${standardError.toFixed(Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS))}`;
     }
     const step = 10 ** -decimals;
     return `${(Math.round(value / step) * step).toFixed(0)} ± ${(Math.round(standardError / step) * step).toFixed(0)}`;

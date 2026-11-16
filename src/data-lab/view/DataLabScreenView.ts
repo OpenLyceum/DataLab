@@ -1,3 +1,4 @@
+import { PANEL } from "../../DataLabConstants.js";
 /**
  * DataLabScreenView.ts
  *
@@ -247,7 +248,7 @@ export class DataLabScreenView extends ScreenView {
     const plot = new PlotNode(model, graphView, { viewWidth: PLOT_WIDTH, viewHeight: PLOT_HEIGHT });
     // Position by the plot rectangle, not by bounds that change with the tick labels.
     plot.x = PLOT_LEFT;
-    plot.y = bounds.minY + SCREEN_VIEW_MARGIN + 4;
+    plot.y = bounds.minY + SCREEN_VIEW_MARGIN + LAYOUT.PLOT_TOP_OFFSET;
     const residualPlot = new ResidualPlotNode(model, graphView, {
       viewWidth: PLOT_WIDTH,
       viewHeight: RESIDUAL_PLOT_HEIGHT,
@@ -380,8 +381,8 @@ export class DataLabScreenView extends ScreenView {
       align: "left",
       spacing: LAYOUT.STACK_SPACING,
       children: [rangeRow, rangeButtons, statusText, messageText, pinControls, scales],
-      left: PLOT_LEFT - 30,
-      top: residualPlot.y + RESIDUAL_PLOT_HEIGHT + 42,
+      left: PLOT_LEFT - LAYOUT.GRAPH_FOOTER_LEFT_INSET,
+      top: residualPlot.y + RESIDUAL_PLOT_HEIGHT + LAYOUT.GRAPH_FOOTER_TOP_GAP,
     });
     this.addChild(belowPlots);
 
@@ -479,7 +480,7 @@ export class DataLabScreenView extends ScreenView {
       { minWidth: RIGHT_COLUMN_WIDTH, align: "left" },
     );
 
-    const resultsPanel = new ResultsPanel(fitTextProperty, RIGHT_COLUMN_WIDTH - 24);
+    const resultsPanel = new ResultsPanel(fitTextProperty, RIGHT_COLUMN_WIDTH - PANEL.CONTENT_WIDTH_INSET);
     const copyButton = createButton(labels.copySummaryStringProperty, () => {
       const current = fitSummary(fitTextProperty.value);
       const pin = model.pinnedFitProperty.value;

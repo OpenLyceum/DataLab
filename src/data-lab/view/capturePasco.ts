@@ -55,7 +55,7 @@ export function capturePasco(onCapture: (data: Dataset, name: string) => void): 
         } else {
           position += delta;
         }
-        times.push(String((received - origin) / 1000));
+        times.push(String((received - origin) / PASCO.MILLISECONDS_PER_SECOND));
         positions.push(String(position));
         status.textContent = fillPattern(labels.pascoSamplesStringProperty.value, { count: times.length });
         await new Promise<void>((resolve) =>

@@ -62,7 +62,11 @@ function refine(profile: Profile, points: readonly Point[], seed: Trial): Trial 
     simplex.sort((a, b) => a.cost - b.cost);
     const best = simplex[0] as Trial;
     const worst = simplex[dimensions] as Trial;
-    if (simplex.every((trial) => trial.shape.every((x, j) => Math.abs(x - (best.shape[j] as number)) < 1e-9))) {
+    if (
+      simplex.every((trial) =>
+        trial.shape.every((x, j) => Math.abs(x - (best.shape[j] as number)) < PROFILED_FIT.SIMPLEX_TOLERANCE),
+      )
+    ) {
       return best;
     }
     const centre = best.shape.map(
