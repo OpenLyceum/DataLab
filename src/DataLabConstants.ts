@@ -114,6 +114,8 @@ export const LAYOUT = {
   BUTTON_Y_MARGIN: 5,
   COMBO_Y_MARGIN: 4,
   BUTTON_MAX_TEXT_WIDTH: 110,
+  /** Gap between a button's icon and its one-word caption. */
+  ICON_CAPTION_SPACING: 5,
   RUN_SELECT_WIDTH: 120,
   COMBO_LABEL_INSET: 40,
   PANEL_TITLE_INSET: 30,

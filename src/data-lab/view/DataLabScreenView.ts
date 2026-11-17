@@ -35,15 +35,17 @@ import {
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabPreferencesModel } from "../../preferences/DataLabPreferencesModel.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
+import { ButtonTooltip } from "./ButtonTooltip.js";
 import { createFitControlsColumn } from "./createFitControlsColumn.js";
+import { createIconButton } from "./createIconButton.js";
 import { createImportExportControls } from "./createImportExportControls.js";
-import { createTextButton } from "./createTextButton.js";
 import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
 import { escapeMarkup } from "./escapeMarkup.js";
 import { fillPattern } from "./fillPattern.js";
 import { createFitTextProperty, pinnedFitText } from "./fitText.js";
 import { GraphView } from "./GraphView.js";
+import { Icons } from "./icons.js";
 import { PlotNode } from "./PlotNode.js";
 import { createRangeControls } from "./RangeControls.js";
 import { ResidualPlotNode } from "./ResidualPlotNode.js";
@@ -80,7 +82,6 @@ export class DataLabScreenView extends ScreenView {
     const labels = StringManager.getInstance().getLabels();
     const bounds = this.layoutBounds;
     const textOptions = { font: FONTS.CONTROL, fill: DataLabColors.textColorProperty };
-    const createButton = createTextButton;
 
     const runs = createRunControls(model, graphView, preferences, this.messageProperty);
     const tableBar = createImportExportControls(model, graphView, runs, this.messageProperty);
@@ -123,14 +124,18 @@ export class DataLabScreenView extends ScreenView {
 
     // ── Range ─────────────────────────────────────────────────────────────────
     const rangeRow = createRangeControls(model, graphView.rectangleSelectionProperty);
-    const clearRangeButton = createButton(labels.clearRangeStringProperty, () => model.clearRange());
-    const zoomButton = createButton(labels.zoomToRangeStringProperty, () => {
+    const clearRangeButton = createIconButton(Icons.clearRange(), labels.clearRangeStringProperty, () =>
+      model.clearRange(),
+    );
+    const zoomButton = createIconButton(Icons.zoomIn(), labels.zoomToRangeStringProperty, () => {
       const range = model.rangeProperty.value;
       if (range) {
         graphView.zoomToRange(range);
       }
     });
-    const autoScaleButton = createButton(labels.autoScaleStringProperty, () => graphView.autoScale());
+    const autoScaleButton = createIconButton(Icons.autoScale(), labels.autoScaleStringProperty, () =>
+      graphView.autoScale(),
+    );
     model.rangeProperty.link((range) => {
       clearRangeButton.enabled = range !== null;
       zoomButton.enabled = range !== null;
@@ -139,15 +144,19 @@ export class DataLabScreenView extends ScreenView {
       autoScaleButton.enabled = !isAutoScaled;
     });
 
-    const analyzeButton = createButton(labels.rangeAnalysisStringProperty, () => showRangeAnalysis(model));
+    const analyzeButton = createIconButton(Icons.statistics(), labels.rangeAnalysisStringProperty, () =>
+      showRangeAnalysis(model),
+    );
     const rangeButtons = new HBox({
       spacing: LAYOUT.BUTTON_ROW_SPACING,
       children: [clearRangeButton, zoomButton, autoScaleButton, analyzeButton],
     });
 
-    const pinButton = createButton(labels.pinFitStringProperty, () => model.pinFit());
-    const removePinButton = createButton(labels.removePinnedFitStringProperty, () => model.clearPinnedFit());
-    const compareButton = createButton(labels.compareFitsStringProperty, () => {
+    const pinButton = createIconButton(Icons.pin(), labels.pinFitStringProperty, () => model.pinFit());
+    const removePinButton = createIconButton(Icons.unpin(), labels.removePinnedFitStringProperty, () =>
+      model.clearPinnedFit(),
+    );
+    const compareButton = createIconButton(Icons.compare(), labels.compareFitsStringProperty, () => {
       const pin = model.pinnedFitProperty.value;
       if (pin) {
         showFitComparison(fitTextProperty.value, pinnedFitText(pin));
@@ -250,6 +259,7 @@ export class DataLabScreenView extends ScreenView {
     // ── Keyboard / reading order ──────────────────────────────────────────────
     this.addChild(fitColumn.fitModelPopup);
     this.addChild(liveStatus);
+    ButtonTooltip.install(this, bounds);
     this.addChild(
       new Node({
         pdomOrder: [

@@ -25,10 +25,11 @@ import { RunWorkspace } from "../model/RunWorkspace.js";
 import { decodeSession, encodeSession, type RunSession, type Session } from "../model/sessionFile.js";
 import { restoreWorkspace, saveWorkspace } from "../model/workspaceStorage.js";
 import { capturePasco } from "./capturePasco.js";
-import { createTextButton } from "./createTextButton.js";
+import { createIconButton } from "./createIconButton.js";
 import { editRun } from "./editRun.js";
 import { fillPattern } from "./fillPattern.js";
 import type { GraphView } from "./GraphView.js";
+import { Icons } from "./icons.js";
 
 export type RunControls = {
   /** The run chooser with New run and Manage run. */
@@ -152,7 +153,7 @@ export function createRunControls(
     });
     runsChanged();
   };
-  const newRunButton = createTextButton(labels.newRunStringProperty, () => {
+  const newRunButton = createIconButton(Icons.newRun(), labels.newRunStringProperty, () => {
     const columnName = (position: number) => fillPattern(labels.defaultColumnNameStringProperty.value, { position });
     addRun(
       { columns: [createColumn(columnName(1), "", [""]), createColumn(columnName(2), "", [""])], rowCount: 1 },
@@ -160,10 +161,17 @@ export function createRunControls(
       false,
     );
   });
-  const captureButton = createTextButton(labels.capturePascoStringProperty, () => {
-    capturePasco((dataset, name) => addRun(dataset, name, true));
-  });
-  const manageRunButton = createTextButton(labels.manageRunStringProperty, () => editRun(runWorkspace, runsChanged));
+  const captureButton = createIconButton(
+    Icons.bluetooth(),
+    labels.capturePascoStringProperty,
+    () => {
+      capturePasco((dataset, name) => addRun(dataset, name, true));
+    },
+    { caption: labels.capturePascoStringProperty },
+  );
+  const manageRunButton = createIconButton(Icons.edit(), labels.manageRunStringProperty, () =>
+    editRun(runWorkspace, runsChanged),
+  );
 
   // ── Session files ─────────────────────────────────────────────────────────
   const openSession = (text: string) => {
@@ -177,10 +185,10 @@ export function createRunControls(
   const fileUnreadable = () => {
     messageProperty.value = labels.fileReadFailedStringProperty.value;
   };
-  const loadSessionButton = createTextButton(labels.openSessionStringProperty, () =>
+  const loadSessionButton = createIconButton(Icons.openSession(), labels.openSessionStringProperty, () =>
     openTextFile(openSession, fileUnreadable, ".json,application/json"),
   );
-  const saveSessionButton = createTextButton(labels.saveSessionStringProperty, () => {
+  const saveSessionButton = createIconButton(Icons.save(), labels.saveSessionStringProperty, () => {
     downloadText(encodeSession(runWorkspace.save()), SESSION_FILE_NAME, "application/json");
   });
 

@@ -15,10 +15,11 @@ import { downloadText, installDropTarget, openTextFile } from "../../common/view
 import { EXPORT_FILE_NAME, LAYOUT } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
-import { createTextButton } from "./createTextButton.js";
+import { createIconButton } from "./createIconButton.js";
 import { editCalculatedColumn } from "./editCalculatedColumn.js";
 import { fillPattern } from "./fillPattern.js";
 import type { GraphView } from "./GraphView.js";
+import { Icons } from "./icons.js";
 import type { RunControls } from "./RunControls.js";
 import { isDoubtfulImport, reviewImport } from "./reviewImport.js";
 
@@ -53,7 +54,6 @@ export function createImportExportControls(
   messageProperty: Property<string>,
 ): ImportExportControls {
   const labels = StringManager.getInstance().getLabels();
-  const createButton = createTextButton;
 
   const defaultColumnName = (position: number) =>
     fillPattern(labels.defaultColumnNameStringProperty.value, { position });
@@ -117,10 +117,10 @@ export function createImportExportControls(
     }
   });
 
-  const openButton = createButton(labels.openFileStringProperty, () =>
+  const openButton = createIconButton(Icons.openFile(), labels.openFileStringProperty, () =>
     openTextFile((text) => importText(text), fileUnreadable),
   );
-  const pasteButton = createButton(labels.pasteTableStringProperty, () => {
+  const pasteButton = createIconButton(Icons.paste(), labels.pasteTableStringProperty, () => {
     // Reading the clipboard needs the browser's permission; without it the
     // student is pointed to Ctrl+V, which never does.
     const showHint = () => {
@@ -135,7 +135,7 @@ export function createImportExportControls(
       showHint();
     }
   });
-  const sampleButton = createButton(labels.sampleDataStringProperty, () => {
+  const sampleButton = createIconButton(Icons.sample(), labels.sampleDataStringProperty, () => {
     model.loadSample();
     graphView.autoScale();
     messageProperty.value = "";
@@ -145,22 +145,28 @@ export function createImportExportControls(
     children: [openButton, pasteButton, sampleButton, runs.captureButton],
   });
 
-  const addRowButton = createButton(labels.addRowStringProperty, () => model.addRow());
-  const addColumnButton = createButton(labels.addColumnStringProperty, () => {
+  const addRowButton = createIconButton(Icons.addRow(), labels.addRowStringProperty, () => model.addRow());
+  const addColumnButton = createIconButton(Icons.addColumn(), labels.addColumnStringProperty, () => {
     model.addColumn(defaultColumnName(model.datasetProperty.value.columns.length + 1));
   });
-  const calculatedButton = createButton(labels.calculatedColumnStringProperty, () => editCalculatedColumn(model));
-  const exportButton = createButton(labels.exportCsvStringProperty, () => {
-    const csv = exportCsv(model.datasetProperty.value, {
-      xColumnIndex: model.xColumnIndexProperty.value,
-      inclusion: model.inclusionProperty.value,
-      fit: model.fitProperty.value,
-    });
-    downloadText(csv, EXPORT_FILE_NAME, "text/csv;charset=utf-8;");
-  });
-  // Arrows keep the row inside the table's width; the names are read out.
-  const undoButton = createButton("↶", () => model.undo(), { accessibleName: labels.undoStringProperty });
-  const redoButton = createButton("↷", () => model.redo(), { accessibleName: labels.redoStringProperty });
+  const calculatedButton = createIconButton(Icons.formula(), labels.calculatedColumnStringProperty, () =>
+    editCalculatedColumn(model),
+  );
+  const exportButton = createIconButton(
+    Icons.download(),
+    labels.exportCsvStringProperty,
+    () => {
+      const csv = exportCsv(model.datasetProperty.value, {
+        xColumnIndex: model.xColumnIndexProperty.value,
+        inclusion: model.inclusionProperty.value,
+        fit: model.fitProperty.value,
+      });
+      downloadText(csv, EXPORT_FILE_NAME, "text/csv;charset=utf-8;");
+    },
+    { caption: "CSV" },
+  );
+  const undoButton = createIconButton(Icons.undo(), labels.undoStringProperty, () => model.undo());
+  const redoButton = createIconButton(Icons.redo(), labels.redoStringProperty, () => model.redo());
   model.canUndoProperty.link((canUndo) => {
     undoButton.enabled = canUndo;
   });

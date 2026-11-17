@@ -62,9 +62,14 @@ every column ends above the bottom margin:
 | Middle | Graph · residual graph · range fields · Clear range, Zoom to range, Auto scale, Range analysis · Log x, Log y, Rectangle · status line · hint or last message |
 | Right | Column and fit-model panel · results panel · Copy results, Export PNG, Pin fit, Compare fits, Remove pin · pinned-fit legend |
 
+- **Buttons are icons.** Each is drawn in `icons.ts`; its full name is the
+  accessible name and appears as a tooltip on hover or focus (`ButtonTooltip.ts`),
+  disabled buttons included. Only a file format (CSV, PNG) or a brand (PASCO)
+  gets a one-word caption beside its icon. Keeping the words out of the buttons
+  keeps every row the same width in every language.
 - **The table has no fixed height.** It takes what the four button rows around
-  it leave, so a taller button (a longer translation) shrinks the table rather
-  than pushing controls into the navigation bar.
+  it leave, so a taller button shrinks the table rather than pushing controls
+  into the navigation bar.
 - **The y range fields** are shown only while Rectangle is on or the range has y
   bounds (a session file can bring them); otherwise they would be two blank boxes.
 - **Text wraps rather than shrinks.** The hint under the status line and a long

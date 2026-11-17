@@ -53,6 +53,8 @@ The roadmap (first release, later releases, open decisions) is in
 | `src/data-lab/view/RunControls.ts` | Run chooser, session files, PASCO capture, and saving the workspace to browser storage |
 | `src/data-lab/view/reviewImport.ts` | Import dialog, shown when the automatic reading left a column without numbers |
 | `src/data-lab/view/fitText.ts` | One source for the status line, results panel, copied summary and screen-reader details |
+| `src/data-lab/view/createIconButton.ts`, `icons.ts` | The screen's flat icon buttons and their line icons; the full name is the accessible name and the tooltip |
+| `src/data-lab/view/ButtonTooltip.ts` | One tooltip for every icon button, on hover (disabled buttons too, via `move`, since Scenery cuts `over` trails at a disabled node) and focus |
 | `src/data-lab/view/DataLabScreenView.ts` | Layout, import/export buttons, undo/redo, column choosers, pdom order |
 
 ## Model notes
@@ -129,6 +131,7 @@ strings under `a11y.dataLab` in each locale.
 - **Mathematical notation is not translated:** the model equations and parameter symbols in
   `formatFit.ts` (`y = m·x + b`) and the CSV column names in `exportCsv.ts` (`in_fit`) are
   literals, the same in every language, so an exported file opens the same way everywhere.
+  So are the `CSV` and `PNG` captions on the export buttons: they name file formats.
 - `assets/screenshot.png`: captured with a real browser screenshot (Playwright `page.screenshot()` at
   1154×753), not Baton's `generate-screenshots.sh`. That tool rasterizes the Scenery display through
   joist's `ScreenshotGenerator`, which cannot see HTML elements, so the table, column choosers and

@@ -30,8 +30,9 @@ import {
 } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
 import type { DataLabModel } from "../model/DataLabModel.js";
-import { createTextButton } from "./createTextButton.js";
+import { createIconButton } from "./createIconButton.js";
 import { type FitText, fitSummary, modelNameProperties, pinnedFitText } from "./fitText.js";
+import { Icons } from "./icons.js";
 import { ResultsPanel } from "./ResultsPanel.js";
 
 export type FitControlsColumn = {
@@ -52,7 +53,6 @@ export function createFitControlsColumn(
 ): FitControlsColumn {
   const labels = StringManager.getInstance().getLabels();
   const a11y = StringManager.getInstance().getDataLabA11yStrings();
-  const createButton = createTextButton;
 
   const createSelect = (
     accessibleName: typeof a11y.controls.xColumnStringProperty,
@@ -146,7 +146,7 @@ export function createFitControlsColumn(
   );
 
   const resultsPanel = new ResultsPanel(fitTextProperty, RIGHT_COLUMN_WIDTH - PANEL.CONTENT_WIDTH_INSET);
-  const copyButton = createButton(labels.copySummaryStringProperty, () => {
+  const copyButton = createIconButton(Icons.copy(), labels.copySummaryStringProperty, () => {
     const current = fitSummary(fitTextProperty.value);
     const pin = model.pinnedFitProperty.value;
     const result = pin
@@ -160,28 +160,33 @@ export function createFitControlsColumn(
       .catch(() => undefined);
   });
 
-  const exportGraphButton = createButton(labels.exportPngStringProperty, () => {
-    const background = DataLabColors.backgroundColorProperty.value.toCSS();
-    // Drawn larger than on screen: the graph is going into a lab report.
-    const enlarged = new Node({ scale: PLOT.EXPORT_SCALE, children: [graphs] });
-    enlarged.toCanvas((canvas) => {
-      enlarged.removeAllChildren();
-      enlarged.dispose();
-      const context = canvas.getContext("2d");
-      if (!context) {
-        return;
-      }
-      context.globalCompositeOperation = "destination-over";
-      context.resetTransform();
-      context.fillStyle = background;
-      context.fillRect(0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => {
-        if (blob) {
-          downloadBlob(blob, GRAPH_EXPORT_FILE_NAME);
+  const exportGraphButton = createIconButton(
+    Icons.download(),
+    labels.exportPngStringProperty,
+    () => {
+      const background = DataLabColors.backgroundColorProperty.value.toCSS();
+      // Drawn larger than on screen: the graph is going into a lab report.
+      const enlarged = new Node({ scale: PLOT.EXPORT_SCALE, children: [graphs] });
+      enlarged.toCanvas((canvas) => {
+        enlarged.removeAllChildren();
+        enlarged.dispose();
+        const context = canvas.getContext("2d");
+        if (!context) {
+          return;
         }
+        context.globalCompositeOperation = "destination-over";
+        context.resetTransform();
+        context.fillStyle = background;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => {
+          if (blob) {
+            downloadBlob(blob, GRAPH_EXPORT_FILE_NAME);
+          }
+        });
       });
-    });
-  });
+    },
+    { caption: "PNG" },
+  );
 
   const node = new VBox({
     align: "left",
