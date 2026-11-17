@@ -27,8 +27,9 @@ inclusionProperty, fitProperty → table marks, graphs, results, status, exports
 
 ## Scenery and HTML together
 
-The graphs, buttons, radio buttons and results are Scenery nodes. The table, the
-two column choosers and the two range fields are real HTML elements mounted with
+The graphs, buttons, checkboxes, the fit-model combo box and the results are
+Scenery nodes. The table, the run and column choosers and the four range fields
+are real HTML elements mounted with
 `new DOM(element, { allowInput: true })`, following TrackLab's read-only table.
 Native elements give text entry, selection, the clipboard and touch keyboards for
 free. The cost is that they sit in the visual layer rather than the parallel DOM.
@@ -38,14 +39,42 @@ Table details worth knowing:
 
 - The DOM is rebuilt only when the row or column count changes; otherwise cell
   text is patched in place and the focused input is left alone.
-- Each row has a delete button and each column header has a remove button. The
-  table keeps at least one column so students can continue entering data.
+- Each row has a delete button. Each column's remove button (and, for a
+  calculated column, its ƒx button) sits on a line under the column name, so the
+  name gets the column's full width and two columns fit without sideways
+  scrolling. The table keeps at least one column so students can continue
+  entering data.
 - A cell commits on `change` (blur or Enter). Enter and ↓ move down, ↑ moves up,
   Escape restores the model's text.
 - A paste containing a tab or newline is treated as a block and written through
   `pasteBlock()`; a single value pastes natively.
 - 1000 rows are rendered at a time, with a pager under the table when there are
   more. All rows are still plotted and fitted.
+
+## Screen layout
+
+`DataLabScreenView` lays out three columns in the 1024×618 layout bounds, and
+every column ends above the bottom margin:
+
+| Column | Top to bottom |
+|---|---|
+| Left | Run chooser, New run, Manage run · Open CSV, Paste table, Sample data, PASCO · the table · Add row, Add column, Export CSV, undo, redo · Calculated column, Open session, Save session |
+| Middle | Graph · residual graph · range fields · Clear range, Zoom to range, Auto scale, Range analysis · Log x, Log y, Rectangle · status line · hint or last message |
+| Right | Column and fit-model panel · results panel · Copy results, Export PNG, Pin fit, Compare fits, Remove pin · pinned-fit legend |
+
+- **The table has no fixed height.** It takes what the four button rows around
+  it leave, so a taller button (a longer translation) shrinks the table rather
+  than pushing controls into the navigation bar.
+- **The y range fields** are shown only while Rectangle is on or the range has y
+  bounds (a session file can bring them); otherwise they would be two blank boxes.
+- **Text wraps rather than shrinks.** The hint under the status line and a long
+  fit equation (the damped sine) are `RichText` with `lineWrap`. Their text goes
+  through `escapeMarkup()`, not phet-core's `escapeHTML()`, which turns spaces
+  into `&nbsp;` and so stops the wrap.
+- **The actions on a fit** sit under the results they act on, in a `FlowBox`
+  stretched to the column width so the buttons wrap there.
+- The `pdomOrder` follows the visual order: left column, range handles and
+  buttons, scale checkboxes, status, then the right column and Reset All.
 
 ## Graphs
 
@@ -189,5 +218,9 @@ protocol and capture workflow were exercised with a simulated GATT device.
 - **Graph export** is drawn at three times the on-screen size.
 - Dialogs share `openDialog()` and take the profile's colors; run and range
   controls moved out of `DataLabScreenView`.
+- **Layout** fits the screen: the table takes the height its buttons leave, the
+  pin controls moved beside the results, the y range fields appear only for a
+  rectangle selection, and the hint and long equations wrap instead of
+  shrinking (see *Screen layout*).
 
 Later: PDF report and a shared fleet package for graph, table and fit code.
