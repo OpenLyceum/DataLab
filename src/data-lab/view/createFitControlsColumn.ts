@@ -2,11 +2,13 @@
  * createFitControlsColumn.ts
  *
  * Right-column fit controls: x/y/uncertainty column choosers, the fit-model
- * combo box, the results panel, and the copy / export-graph actions.
+ * combo box, the results panel, and the actions on a fit: copy, export the graph,
+ * and whatever the screen adds (the pin controls). The actions wrap to the
+ * column's width.
  */
 
 import type { Property, TReadOnlyProperty } from "scenerystack/axon";
-import { DOM, HBox, Node, Text, VBox } from "scenerystack/scenery";
+import { DOM, FlowBox, Node, Text, VBox } from "scenerystack/scenery";
 import { ComboBox } from "scenerystack/sun";
 import { DATA_LAB_COMBO_BOX_OPTIONS, LIGHT_SURFACE_TEXT_FILL } from "../../common/DataLabButtonOptions.js";
 import { DataLabPanel } from "../../common/DataLabPanel.js";
@@ -45,6 +47,8 @@ export function createFitControlsColumn(
   fitTextProperty: TReadOnlyProperty<FitText>,
   graphs: Node,
   messageProperty: Property<string>,
+  extraActions: readonly Node[] = [],
+  footer: readonly Node[] = [],
 ): FitControlsColumn {
   const labels = StringManager.getInstance().getLabels();
   const a11y = StringManager.getInstance().getDataLabA11yStrings();
@@ -185,7 +189,17 @@ export function createFitControlsColumn(
     children: [
       controlPanel,
       resultsPanel,
-      new HBox({ spacing: LAYOUT.BUTTON_ROW_SPACING, children: [copyButton, exportGraphButton] }),
+      new FlowBox({
+        orientation: "horizontal",
+        wrap: true,
+        justify: "left",
+        spacing: LAYOUT.BUTTON_ROW_SPACING,
+        lineSpacing: LAYOUT.BUTTON_ROW_SPACING,
+        // Stretched to the panels' width, so the buttons wrap at the column's edge.
+        layoutOptions: { stretch: true },
+        children: [copyButton, exportGraphButton, ...extraActions],
+      }),
+      ...footer,
     ],
   });
 

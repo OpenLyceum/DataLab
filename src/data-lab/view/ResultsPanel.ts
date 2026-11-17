@@ -7,12 +7,13 @@
  */
 
 import type { TReadOnlyProperty } from "scenerystack/axon";
-import { Text, VBox } from "scenerystack/scenery";
+import { RichText, Text, VBox } from "scenerystack/scenery";
 import { DataLabPanel } from "../../common/DataLabPanel.js";
 import { MODEL_SYMBOLS } from "../../common/model/formatFit.js";
 import DataLabColors from "../../DataLabColors.js";
 import { FONTS, PANEL, RESULTS } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
+import { escapeMarkup } from "./escapeMarkup.js";
 import type { FitText } from "./fitText.js";
 
 /** Parameters plus RMSE, a goodness-of-fit statistic, and points used. */
@@ -24,7 +25,12 @@ export class ResultsPanel extends DataLabPanel {
     const textOptions = { fill: DataLabColors.textColorProperty, maxWidth: contentWidth };
 
     const title = new Text(labels.resultsStringProperty, { ...textOptions, font: FONTS.RESULTS_TITLE });
-    const equation = new Text("", { ...textOptions, font: FONTS.RESULTS_LINE });
+    // A long equation (a damped sine, say) wraps at a space rather than shrinking out of reach.
+    const equation = new RichText("", {
+      fill: DataLabColors.textColorProperty,
+      font: FONTS.RESULTS_LINE,
+      lineWrap: contentWidth,
+    });
     const lines = Array.from({ length: MAX_LINES }, () => new Text("", { ...textOptions, font: FONTS.RESULTS_LINE }));
     const caution = new Text("", {
       ...textOptions,
@@ -41,7 +47,7 @@ export class ResultsPanel extends DataLabPanel {
     super(content, { minWidth: contentWidth + PANEL.CONTENT_WIDTH_INSET, align: "left" });
 
     fitTextProperty.link((fitText) => {
-      equation.string = fitText.equation;
+      equation.string = escapeMarkup(fitText.equation);
       lines.forEach((line, i) => {
         const string = fitText.lines[i];
         line.visible = string !== undefined;

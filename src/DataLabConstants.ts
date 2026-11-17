@@ -35,8 +35,8 @@ const CONTROL_FONT_SIZE = 12;
 
 // ── Data table (left column) ──────────────────────────────────────────────────
 
-export const TABLE_WIDTH = 290;
-export const TABLE_HEIGHT = 472;
+/** The table's height is what the buttons above and below it leave (DataLabScreenView). */
+export const TABLE_WIDTH = 300;
 
 // ── Graphs (middle column) ────────────────────────────────────────────────────
 
@@ -210,7 +210,7 @@ export const TABLE = {
   MARKER_WIDTH: 22,
   ROW_NUMBER_WIDTH: 30,
   REMOVE_BUTTON_WIDTH: 23,
-  EXCLUSION_WIDTH: 48,
+  EXCLUSION_WIDTH: 42,
   CELL_PADDING: "3px 5px",
   /** Rows drawn in the table at a time; every row is still plotted and fitted. */
   ROWS_PER_PAGE: 1000,
@@ -392,7 +392,6 @@ DataLabNamespace.register("DataLabConstants", {
   COLUMN_SPACING,
   CONTROL_FONT_SIZE,
   TABLE_WIDTH,
-  TABLE_HEIGHT,
   PLOT_LEFT,
   PLOT_WIDTH,
   PLOT_HEIGHT,

@@ -8,7 +8,8 @@
  * Editing: type in a cell and press Enter or leave it to commit; ↑/↓ and Enter move
  * between rows; Escape abandons the edit. Pasting a block copied from a spreadsheet
  * fills cells from the focused one, adding rows as needed. A header cell holds the
- * column's name and unit together, written "Time (s)".
+ * column's name and unit together, written "Time (s)", with the column's buttons
+ * (remove, edit formula) on a line beneath it so the name gets the column's width.
  *
  * Rows the fit uses are tinted and carry a check mark in the first column, so
  * inclusion does not rest on color alone.
@@ -87,7 +88,7 @@ export class DataTableNode extends Node {
       input.type = "text";
       input.autocomplete = "off";
       input.spellcheck = false;
-      input.style.cssText = `width: ${cellWidth}px; box-sizing: border-box; border: none; background: transparent; font: ${TABLE.FONT}; padding: ${TABLE.CELL_PADDING}; text-align: ${bold ? "center" : "right"}; ${bold ? "font-weight: bold;" : ""}`;
+      input.style.cssText = `width: ${cellWidth}px; box-sizing: border-box; border: none; background: transparent; font: ${TABLE.FONT}; padding: ${bold ? "3px 4px" : TABLE.CELL_PADDING}; text-align: ${bold ? "center" : "right"}; ${bold ? "font-weight: bold;" : ""}`;
     };
 
     const pageOf = (rowIndex: number) => Math.floor(rowIndex / TABLE.ROWS_PER_PAGE) * TABLE.ROWS_PER_PAGE;
@@ -107,13 +108,14 @@ export class DataTableNode extends Node {
       }
     };
 
+    const smallButtonStyle = `min-width: ${TABLE.REMOVE_BUTTON_WIDTH}px; font: ${TABLE.FONT}; padding: 0 4px; line-height: 16px;`;
     const removeButton = (name: string, action: () => void) => {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = "×";
       button.title = name;
       button.setAttribute("aria-label", name);
-      button.style.cssText = `min-width: ${TABLE.REMOVE_BUTTON_WIDTH}px; font: ${TABLE.FONT};`;
+      button.style.cssText = smallButtonStyle;
       button.addEventListener("click", action);
       return button;
     };
@@ -128,10 +130,7 @@ export class DataTableNode extends Node {
         TABLE.REMOVE_BUTTON_WIDTH -
         TABLE.EXCLUSION_WIDTH -
         TABLE.SCROLLBAR_ALLOWANCE;
-      cellWidth = Math.max(
-        TABLE.MIN_CELL_WIDTH,
-        Math.floor(available / Math.max(dataset.columns.length, 1)) - TABLE.REMOVE_BUTTON_WIDTH,
-      );
+      cellWidth = Math.max(TABLE.MIN_CELL_WIDTH, Math.floor(available / Math.max(dataset.columns.length, 1)));
       wrapper.style.background = colors.surface;
       wrapper.style.border = `1px solid ${colors.grid}`;
       thead.replaceChildren();
@@ -164,7 +163,7 @@ export class DataTableNode extends Node {
       actionsHeader.setAttribute("aria-label", labels.deleteRowStringProperty.value);
       const exclusionHeader = document.createElement("th");
       exclusionHeader.scope = "col";
-      exclusionHeader.style.cssText = `${headerCellStyle} min-width: ${TABLE.EXCLUSION_WIDTH}px;`;
+      exclusionHeader.style.cssText = `${headerCellStyle} width: ${TABLE.EXCLUSION_WIDTH}px; font-weight: normal; font-size: 11px;`;
       exclusionHeader.textContent = labels.excludeStringProperty.value;
       headerRow.append(markerHeader, numberHeader, actionsHeader, exclusionHeader);
 
@@ -189,7 +188,8 @@ export class DataTableNode extends Node {
           }
         });
         headerInputs.push(input);
-        th.style.whiteSpace = "nowrap";
+        const tools = document.createElement("div");
+        tools.style.cssText = "display: flex; justify-content: flex-end; gap: 2px; padding: 0 2px 2px;";
         const remove = removeButton(
           fillPattern(a11y.controls.deleteColumnStringProperty.value, { position: c + 1 }),
           () => {
@@ -199,16 +199,18 @@ export class DataTableNode extends Node {
           },
         );
         removeColumns.push(remove);
-        th.append(input, remove);
         if (column.formula !== undefined) {
           const edit = document.createElement("button");
           edit.type = "button";
           edit.textContent = "ƒx";
           edit.title = labels.editFormulaStringProperty.value;
+          edit.style.cssText = smallButtonStyle;
           formulaButtons.set(c, edit);
           edit.addEventListener("click", () => editCalculatedColumn(model, c));
-          th.append(edit);
+          tools.append(edit);
         }
+        tools.append(remove);
+        th.append(input, tools);
         headerRow.appendChild(th);
       });
       thead.appendChild(headerRow);

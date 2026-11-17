@@ -2,9 +2,11 @@
  * DataLabScreenView.ts
  *
  * Lays out the Data Lab screen in three columns: the data table with its import
- * and export buttons on the left; the graph, the residual graph, the range fields
- * and the status line in the middle; the column choosers, the fit model and the
- * results on the right.
+ * and export buttons on the left; the graph, the residual graph, the range fields,
+ * the scale options and the status line in the middle; the column choosers, the fit
+ * model, the results and the actions on a fit (copy, export, pin) on the right.
+ * Every column ends above the screen's bottom margin: the table takes whatever
+ * height the buttons around it leave.
  *
  * Text-entry controls (the table, the column choosers, the range fields) are real
  * HTML elements mounted through Scenery's DOM node; everything else is Scenery.
@@ -12,7 +14,7 @@
 
 import { Multilink, StringProperty } from "scenerystack/axon";
 import { type EmptySelfOptions, optionize } from "scenerystack/phet-core";
-import { HBox, Node, Text, VBox } from "scenerystack/scenery";
+import { HBox, Node, RichText, Text, VBox } from "scenerystack/scenery";
 import { ResetAllButton } from "scenerystack/scenery-phet";
 import { ScreenView, type ScreenViewOptions } from "scenerystack/sim";
 import { Checkbox } from "scenerystack/sun";
@@ -28,7 +30,6 @@ import {
   RESIDUAL_PLOT_HEIGHT,
   RIGHT_COLUMN_WIDTH,
   SCREEN_VIEW_MARGIN,
-  TABLE_HEIGHT,
   TABLE_WIDTH,
 } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
@@ -39,6 +40,7 @@ import { createImportExportControls } from "./createImportExportControls.js";
 import { createTextButton } from "./createTextButton.js";
 import { DataLabScreenSummaryContent } from "./DataLabScreenSummaryContent.js";
 import { DataTableNode } from "./DataTableNode.js";
+import { escapeMarkup } from "./escapeMarkup.js";
 import { fillPattern } from "./fillPattern.js";
 import { createFitTextProperty, pinnedFitText } from "./fitText.js";
 import { GraphView } from "./GraphView.js";
@@ -84,7 +86,13 @@ export class DataLabScreenView extends ScreenView {
     const tableBar = createImportExportControls(model, graphView, runs, this.messageProperty);
 
     // ── Table ─────────────────────────────────────────────────────────────────
-    const table = new DataTableNode(model, { width: TABLE_WIDTH, height: TABLE_HEIGHT });
+    const aroundTable = [runs.runRow, tableBar.importButtons, tableBar.tableButtons, tableBar.fileButtons];
+    const tableHeight =
+      bounds.height -
+      2 * SCREEN_VIEW_MARGIN -
+      aroundTable.reduce((sum, row) => sum + row.height, 0) -
+      aroundTable.length * LAYOUT.STACK_SPACING;
+    const table = new DataTableNode(model, { width: TABLE_WIDTH, height: tableHeight });
     const leftColumn = new VBox({
       align: "left",
       spacing: LAYOUT.STACK_SPACING,
@@ -114,7 +122,7 @@ export class DataLabScreenView extends ScreenView {
     });
 
     // ── Range ─────────────────────────────────────────────────────────────────
-    const rangeRow = createRangeControls(model);
+    const rangeRow = createRangeControls(model, graphView.rectangleSelectionProperty);
     const clearRangeButton = createButton(labels.clearRangeStringProperty, () => model.clearRange());
     const zoomButton = createButton(labels.zoomToRangeStringProperty, () => {
       const range = model.rangeProperty.value;
@@ -148,17 +156,13 @@ export class DataLabScreenView extends ScreenView {
     const pinLegend = new Text(labels.pinnedFitLegendStringProperty, {
       font: FONTS.NOTE,
       fill: DataLabColors.pinnedFitColorProperty,
-      maxWidth: PLOT_WIDTH,
+      maxWidth: RIGHT_COLUMN_WIDTH,
     });
     Multilink.multilink([model.rangeProperty, model.fitProperty, model.pinnedFitProperty], (range, fit, pin) => {
       pinButton.enabled = range !== null && fit.ok && pin === null;
       removePinButton.enabled = pin !== null;
       compareButton.enabled = pin !== null;
       pinLegend.visible = pin !== null;
-    });
-    const pinControls = new HBox({
-      spacing: LAYOUT.BUTTON_ROW_SPACING,
-      children: [pinButton, compareButton, removePinButton, pinLegend],
     });
 
     const logXCheckbox = new Checkbox(graphView.logXProperty, new Text(labels.logXStringProperty, textOptions), {
@@ -196,25 +200,37 @@ export class DataLabScreenView extends ScreenView {
         }
       },
     );
-    const messageText = new Text("", { font: FONTS.NOTE, fill: DataLabColors.textColorProperty, maxWidth: PLOT_WIDTH });
+    // The hint wraps rather than shrinking to fit one line, so it stays readable.
+    const messageText = new RichText("", {
+      font: FONTS.NOTE,
+      fill: DataLabColors.textColorProperty,
+      lineWrap: PLOT_WIDTH + LAYOUT.GRAPH_FOOTER_LEFT_INSET,
+    });
     Multilink.multilink(
       [this.messageProperty, labels.dragHintStringProperty, labels.localOnlyStringProperty],
       (message, dragHint, localOnly) => {
-        messageText.string = message === "" ? `${dragHint} ${localOnly}` : message;
+        messageText.string = escapeMarkup(message === "" ? `${dragHint} ${localOnly}` : message);
       },
     );
 
     const belowPlots = new VBox({
       align: "left",
-      spacing: LAYOUT.STACK_SPACING,
-      children: [rangeRow, rangeButtons, statusText, messageText, pinControls, scales],
+      spacing: LAYOUT.BUTTON_ROW_SPACING,
+      children: [rangeRow, rangeButtons, scales, statusText, messageText],
       left: PLOT_LEFT - LAYOUT.GRAPH_FOOTER_LEFT_INSET,
       top: residualPlot.y + RESIDUAL_PLOT_HEIGHT + LAYOUT.GRAPH_FOOTER_TOP_GAP,
     });
     this.addChild(belowPlots);
 
     // ── Right column ──────────────────────────────────────────────────────────
-    const fitColumn = createFitControlsColumn(model, fitTextProperty, graphs, this.messageProperty);
+    const fitColumn = createFitControlsColumn(
+      model,
+      fitTextProperty,
+      graphs,
+      this.messageProperty,
+      [pinButton, compareButton, removePinButton],
+      [pinLegend],
+    );
     fitColumn.node.top = bounds.minY + SCREEN_VIEW_MARGIN;
     fitColumn.node.left = bounds.maxX - SCREEN_VIEW_MARGIN - RIGHT_COLUMN_WIDTH;
     this.addChild(fitColumn.node);
@@ -257,16 +273,16 @@ export class DataLabScreenView extends ScreenView {
           zoomButton,
           autoScaleButton,
           analyzeButton,
-          liveStatus,
-          rectangleCheckbox,
           logXCheckbox,
           logYCheckbox,
-          pinButton,
-          compareButton,
-          removePinButton,
+          rectangleCheckbox,
+          liveStatus,
           fitColumn.fitModelComboBox,
           fitColumn.copyButton,
           fitColumn.exportGraphButton,
+          pinButton,
+          compareButton,
+          removePinButton,
           resetAllButton,
         ],
       }),

@@ -10,6 +10,7 @@
  * their rounded text, which could move an edge off the data point it sits on.
  */
 
+import { Multilink, type TReadOnlyProperty } from "scenerystack/axon";
 import { DOM, HBox, type Node, Text } from "scenerystack/scenery";
 import { parseNumber } from "../../common/model/Dataset.js";
 import type { XRange } from "../../common/model/includedRows.js";
@@ -21,7 +22,12 @@ import type { DataLabModel } from "../model/DataLabModel.js";
 const Y_FIELD_WIDTH = LAYOUT.Y_RANGE_FIELD_WIDTH;
 const FIELD_DIGITS = LAYOUT.RANGE_FIELD_DIGITS;
 
-export function createRangeControls(model: DataLabModel): Node {
+/**
+ * @param rectangleSelectionProperty - the y fields are shown while a rectangle selection is on,
+ *   or while the range has y bounds (from a session file, say); otherwise they would be two
+ *   unexplained empty boxes.
+ */
+export function createRangeControls(model: DataLabModel, rectangleSelectionProperty: TReadOnlyProperty<boolean>): Node {
   const labels = StringManager.getInstance().getLabels();
   const a11y = StringManager.getInstance().getDataLabA11yStrings();
   const textOptions = { font: FONTS.CONTROL, fill: DataLabColors.textColorProperty };
@@ -110,6 +116,18 @@ export function createRangeControls(model: DataLabModel): Node {
     unitText.string = column?.unit ?? "";
   });
 
+  const yFields = new HBox({
+    spacing: LAYOUT.BUTTON_ROW_SPACING,
+    children: [
+      new Text(labels.rectangleYStringProperty, { ...textOptions, maxWidth: LAYOUT.RANGE_Y_MAX_WIDTH }),
+      new DOM(minYField.input, { allowInput: true }),
+      new DOM(maxYField.input, { allowInput: true }),
+    ],
+  });
+  Multilink.multilink([rectangleSelectionProperty, model.rangeProperty], (rectangle, range) => {
+    yFields.visible = rectangle || range?.y !== undefined;
+  });
+
   return new HBox({
     spacing: LAYOUT.BUTTON_ROW_SPACING,
     children: [
@@ -118,9 +136,7 @@ export function createRangeControls(model: DataLabModel): Node {
       new Text(labels.rangeToStringProperty, { ...textOptions, maxWidth: LAYOUT.RANGE_TO_MAX_WIDTH }),
       new DOM(maxField.input, { allowInput: true }),
       unitText,
-      new Text(labels.rectangleYStringProperty, { ...textOptions, maxWidth: LAYOUT.RANGE_Y_MAX_WIDTH }),
-      new DOM(minYField.input, { allowInput: true }),
-      new DOM(maxYField.input, { allowInput: true }),
+      yFields,
     ],
   });
 }
