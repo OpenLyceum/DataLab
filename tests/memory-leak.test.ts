@@ -29,7 +29,7 @@ import { DataLabPreferencesModel } from "../src/preferences/DataLabPreferencesMo
 import { describeDisposalLeaks, forceGC } from "./helpers/memoryLeak.js";
 
 // Nothing in Data Lab is created and disposed at run time (see the header).
-describeDisposalLeaks([]);
+describeDisposalLeaks([], { emptyOk: "models/views are long-lived or covered by custom forceGC suites below" });
 
 const VIEW = { viewWidth: 300, viewHeight: 200 } as const;
 
