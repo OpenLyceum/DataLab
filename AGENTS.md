@@ -122,7 +122,6 @@ strings under `a11y.dataLab` in each locale.
 
 ## Compliance carve-outs
 
-- `.github/workflows/ci.yml`: `unused-mode: advisory` until both Knip default and production baselines are reviewed and cleared ([Baton/doc/knip.md](https://github.com/OpenLyceum/Baton/blob/main/doc/knip.md)).
 - **HTML form controls:** `DataTableNode.ts`, `RangeControls.ts`, `RunControls.ts`,
   `DataLabScreenView.ts` and the dialogs build `<table>`, `<input>`, `<select>` and `<dialog>` elements and style them with inline CSS. Colors still come from `DataLabColors`
   (read as `.value.toCSS()`); font and geometry are CSS strings because Scenery options do not
