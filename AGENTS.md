@@ -139,8 +139,6 @@ strings under `a11y.dataLab` in each locale.
 - `scripts/generate-sample.ts`: sim-specific script that writes the bundled sample dataset.
 - `tests/memory-leak.test.ts`: the disposal list is empty — the model and view are built once and
   live for the page's lifetime.
-- `doc/multi-screen.md`, `doc/improvement-recommendations.md`: removed; single-screen tool, and the
-  roadmap lives in `doc/implementation-notes.md`.
 
 ## Testing
 
