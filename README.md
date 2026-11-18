@@ -58,7 +58,7 @@ npm start        # dev server → http://localhost:5173
 | `npm run release` | `check && lint && build && test`, then version patch + push tags |
 | `npm run clean` | Remove `dist/` |
 | `npx playwright test tests/browser` | End-to-end workflow tests in Chromium |
-| `node scripts/generate-sample.ts` | Rewrite the bundled sample dataset |
+| `npm run generate:sample` | Rewrite the bundled sample dataset |
 
 New sims start at `version: "0.0.0"` in `package.json`. Bump only when cutting a release (for example `npm version patch` and a matching git tag). Keep `name` in kebab-case; it is separate from the SceneryStack sim identifier in `src/init.ts`, which reads its `version` from `package.json`.
 

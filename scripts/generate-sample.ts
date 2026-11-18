@@ -9,7 +9,7 @@
  *   0 ≤ t ≤ 1.5 s   x = 0.30·t²                  (a = 0.60 m/s²)
  *   t > 1.5 s       x = 0.675 + 0.90·(t − 1.5)   (v = 0.90 m/s)
  *
- * Run: node scripts/generate-sample.ts
+ * Run with `npm run generate:sample`.
  */
 
 import { writeFileSync } from "node:fs";

@@ -170,4 +170,4 @@ A new fit model needs a NIST or independently computed reference before it ships
 npm run lint && npm run check && npm test && npm run build && npm run test:fuzz:quick
 ```
 
-`node scripts/generate-sample.ts` rewrites the sample dataset (seeded, so the output is stable).
+`npm run generate:sample` rewrites the sample dataset with seeded noise for reproducible output.
