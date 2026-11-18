@@ -78,6 +78,8 @@ export function installGraphGestures(
   let dragStart: Point = { x: 0, y: 0 };
   let startXRange = target.xAxisRangeProperty.value;
   let startYRange = target.yAxisRangeProperty.value;
+  // Pointer-only: axis-strip panning is a pointer shortcut for view state. The keyboard path is the
+  // range fields with Zoom to range, and Auto scale, in DataLabScreenView.
   frame.xAxisStrip.addInputListener(
     new DragListener({
       start: (event) => {
