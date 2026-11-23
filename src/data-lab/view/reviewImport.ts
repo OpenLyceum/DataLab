@@ -11,6 +11,7 @@
 
 import { columnLabel, type Dataset, isNumericColumn } from "../../common/model/Dataset.js";
 import { type Delimiter, type ParseOptions, parseTable } from "../../common/model/parseTable.js";
+import { createOption } from "../../common/view/createOption.js";
 import { openDialog } from "../../common/view/openDialog.js";
 import { IMPORT } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
@@ -51,7 +52,7 @@ export function reviewImport(
   };
   const select = (name: string, choices: readonly (readonly [value: string, label: string])[]) => {
     const control = row(name, document.createElement("select"));
-    control.append(...choices.map(([value, label]) => new Option(label, value)));
+    control.append(...choices.map(([value, label]) => createOption(label, value)));
     return control;
   };
   const checkbox = (name: string) => {

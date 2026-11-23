@@ -16,6 +16,7 @@ import type { Property, TReadOnlyProperty } from "scenerystack/axon";
 import { DOM, HBox, type Node } from "scenerystack/scenery";
 import { createColumn, type Dataset } from "../../common/model/Dataset.js";
 import { FitModel } from "../../common/model/leastSquares.js";
+import { createOption } from "../../common/view/createOption.js";
 import { downloadText, openTextFile } from "../../common/view/fileIO.js";
 import { HTML_CONTROL_FONT, LAYOUT, SESSION_FILE_NAME } from "../../DataLabConstants.js";
 import { StringManager } from "../../i18n/StringManager.js";
@@ -116,7 +117,7 @@ export function createRunControls(
   runSelect.style.cssText = `width: ${LAYOUT.RUN_SELECT_WIDTH}px; box-sizing: border-box; font: ${HTML_CONTROL_FONT}; padding: 2px;`;
   labels.activeRunStringProperty.link((name) => runSelect.setAttribute("aria-label", name));
   const refreshRuns = () => {
-    runSelect.replaceChildren(...runWorkspace.names.map((name, i) => new Option(name, String(i))));
+    runSelect.replaceChildren(...runWorkspace.names.map((name, i) => createOption(name, String(i))));
     runSelect.value = String(runWorkspace.selectedIndex);
   };
   refreshRuns();
