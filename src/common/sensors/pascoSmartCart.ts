@@ -99,6 +99,7 @@ export async function connectSmartCart(signal: AbortSignal, disconnected: () => 
               fail(error);
             }
           };
+          // biome-ignore lint/plugin/no-native-timer: async host/hardware delay (not sim step)
           const timeout = setTimeout(() => fail(new Error("PASCO sample timed out")), PASCO.RESPONSE_TIMEOUT_MS);
           if (signal.aborted) {
             onAbort();

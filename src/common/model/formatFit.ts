@@ -6,7 +6,7 @@
  * SceneryStack imports.
  */
 
-import { toFixed } from "scenerystack/dot";
+import { roundSymmetric, toFixed } from "scenerystack/dot";
 import { FORMAT } from "../../DataLabConstants.js";
 import { FitModel, type FitModelValue, MODEL_POWERS } from "./leastSquares.js";
 
@@ -188,7 +188,7 @@ export function formatWithUncertainty(value: number, standardError: number | nul
       return `${toFixed(value, Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS))} ± ${toFixed(standardError, Math.min(decimals, FORMAT.MAX_FIXED_DECIMALS))}`;
     }
     const step = 10 ** -decimals;
-    return `${toFixed(Math.round(value / step) * step, 0)} ± ${toFixed(Math.round(standardError / step) * step, 0)}`;
+    return `${toFixed(roundSymmetric(value / step) * step, 0)} ± ${toFixed(roundSymmetric(standardError / step) * step, 0)}`;
   }
   const exponent = exponentOf(leading);
   const factor = 10 ** exponent;
