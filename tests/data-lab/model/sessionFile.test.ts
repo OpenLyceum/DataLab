@@ -34,3 +34,18 @@ test("version 2 preserves the active run and rejects a malformed inactive run", 
   const corrupt = text.replace('"name":"Base"', '"name":42');
   expect(decodeSession(corrupt, "")).toBeNull();
 });
+
+test("normalizes legacy weighted linear in the current fit and pin", () => {
+  const legacy = {
+    ...session,
+    model: "weightedLinear",
+    pin: { ...session, model: "weightedLinear", range: { min: 0, max: 1 } },
+  };
+  for (const payload of [
+    { ...legacy, version: 1 },
+    { runs: [{ name: "Legacy", session: legacy }], activeIndex: 0, version: 2 },
+  ]) {
+    const decoded = decodeSession(JSON.stringify({ ...payload, format: "openlyceum-data-lab" }), "Legacy");
+    expect(decoded?.runs[0]?.session).toMatchObject({ model: "linear", pin: { model: "linear" } });
+  }
+});

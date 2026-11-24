@@ -11,11 +11,14 @@ const STORAGE_KEY = "openlyceum.data-lab.table.v1";
 /** JSON encodes NaN and infinities as null. Keep the parsed values alongside the original text. */
 type StoredColumn = Omit<Column, "values"> & { readonly values: readonly (number | null)[] };
 
-function isStoredColumn(value: unknown, rowCount: number): value is StoredColumn {
-  if (typeof value !== "object" || value === null) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isStoredColumn(column: unknown, rowCount: number): column is StoredColumn {
+  if (!isRecord(column)) {
     return false;
   }
-  const column = value as Record<string, unknown>;
   return (
     typeof column["name"] === "string" &&
     typeof column["unit"] === "string" &&
@@ -30,27 +33,28 @@ function isStoredColumn(value: unknown, rowCount: number): value is StoredColumn
 }
 
 export function decodeDataset(value: unknown): Dataset | null {
-  if (!value || typeof value !== "object") {
+  if (!isRecord(value)) {
     return null;
   }
-  const {
-    rowCount,
-    columns,
-    excludedRows = [],
-  } = value as { rowCount?: number; columns?: unknown[]; excludedRows?: number[] };
+  const { rowCount, columns: rawColumns, excludedRows: rawExcludedRows = [] } = value;
+  if (!(Array.isArray(rawColumns) && Array.isArray(rawExcludedRows))) {
+    return null;
+  }
+  const columns: readonly unknown[] = rawColumns;
+  const excludedRows: readonly unknown[] = rawExcludedRows;
   if (
     typeof rowCount !== "number" ||
     !Number.isSafeInteger(rowCount) ||
     rowCount < 0 ||
-    !Array.isArray(columns) ||
     columns.length === 0 ||
     !columns.every(
       (column, index): column is StoredColumn =>
         isStoredColumn(column, rowCount) &&
         (column.formula === undefined || compileFormula(column.formula, index) !== null),
     ) ||
-    !Array.isArray(excludedRows) ||
-    !excludedRows.every((row) => Number.isInteger(row) && row >= 0 && row < rowCount)
+    !excludedRows.every(
+      (row): row is number => typeof row === "number" && Number.isInteger(row) && row >= 0 && row < rowCount,
+    )
   ) {
     return null;
   }

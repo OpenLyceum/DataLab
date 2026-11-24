@@ -24,28 +24,50 @@ function validIndex(index: unknown, dataset: Dataset): index is number {
   return typeof index === "number" && Number.isInteger(index) && index >= -1 && index < dataset.columns.length;
 }
 
-function validRange(range: unknown): range is XRange | null {
-  if (range === null) {
-    return true;
-  }
-  if (!range || typeof range !== "object") {
-    return false;
-  }
-  const { min, max, y } = range as XRange;
-  return (
-    Number.isFinite(min) &&
-    Number.isFinite(max) &&
-    min <= max &&
-    (y === undefined || (y !== null && Number.isFinite(y.min) && Number.isFinite(y.max) && y.min <= y.max))
-  );
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function validFit(value: unknown, dataset: Dataset): value is FitSettings {
-  if (!value || typeof value !== "object") {
-    return false;
+function decodeInterval(value: unknown): XRange | undefined {
+  if (!isRecord(value)) {
+    return undefined;
   }
-  const { uncertaintyColumn, model, range } = value as FitSettings;
-  return validIndex(uncertaintyColumn, dataset) && Object.values(FitModel).includes(model) && validRange(range);
+  const { min, max } = value;
+  return typeof min === "number" &&
+    typeof max === "number" &&
+    Number.isFinite(min) &&
+    Number.isFinite(max) &&
+    min <= max
+    ? { min, max }
+    : undefined;
+}
+
+function decodeRange(value: unknown): XRange | null | undefined {
+  if (value === null) {
+    return null;
+  }
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const x = decodeInterval(value);
+  if (!x || value["y"] === undefined) {
+    return x;
+  }
+  const y = decodeInterval(value["y"]);
+  return y ? { ...x, y } : undefined;
+}
+
+function decodeFit(value: Record<string, unknown>, dataset: Dataset): FitSettings | null {
+  const { uncertaintyColumn, model: savedModel, range: savedRange } = value;
+  // "Weighted linear" was a separate model before weighting applied to every model.
+  const model =
+    savedModel === "weightedLinear"
+      ? FitModel.LINEAR
+      : Object.values(FitModel).find((candidate) => candidate === savedModel);
+  const range = decodeRange(savedRange);
+  return validIndex(uncertaintyColumn, dataset) && model !== undefined && range !== undefined
+    ? { uncertaintyColumn, model, range }
+    : null;
 }
 
 export type NamedRun = {
@@ -58,34 +80,26 @@ export type RunSession = {
   readonly activeIndex: number;
 };
 
-/** "Weighted linear" was a separate model before weighting applied to every model. */
-function currentModelName<T extends FitSettings | null>(settings: T): T {
-  return settings && (settings.model as string) === "weightedLinear"
-    ? { ...settings, model: FitModel.LINEAR }
-    : settings;
-}
-
-function withCurrentModelNames(file: Session): Session {
-  const current = currentModelName(file);
-  return current.pin && typeof current.pin === "object" ? { ...current, pin: currentModelName(current.pin) } : current;
-}
-
 function decodeRun(value: unknown): Session | null {
-  if (!value || typeof value !== "object") {
+  if (!isRecord(value)) {
     return null;
   }
-  const file = withCurrentModelNames(value as Session);
-  const dataset = decodeDataset(file.dataset);
+  const { dataset: savedDataset, xColumn, yColumn, logX, logY, showResiduals, pin: savedPin } = value;
+  const dataset = decodeDataset(savedDataset);
   if (
-    !(dataset && validFit(file, dataset) && validIndex(file.xColumn, dataset) && validIndex(file.yColumn, dataset)) ||
-    typeof file.logX !== "boolean" ||
-    typeof file.logY !== "boolean" ||
-    typeof file.showResiduals !== "boolean" ||
-    (file.pin !== null && (!validFit(file.pin, dataset) || file.pin.range === null))
+    !(dataset && validIndex(xColumn, dataset) && validIndex(yColumn, dataset)) ||
+    typeof logX !== "boolean" ||
+    typeof logY !== "boolean" ||
+    typeof showResiduals !== "boolean"
   ) {
     return null;
   }
-  return { ...file, dataset };
+  const fit = decodeFit(value, dataset);
+  const pin = isRecord(savedPin) ? decodeFit(savedPin, dataset) : null;
+  if (!fit || (savedPin !== null && (!pin || pin.range === null))) {
+    return null;
+  }
+  return { ...fit, dataset, xColumn, yColumn, logX, logY, showResiduals, pin };
 }
 
 export const MAX_RUN_NAME_LENGTH = SESSION.MAX_RUN_NAME_LENGTH;
@@ -96,17 +110,17 @@ export function encodeSession(session: RunSession): string {
 
 export function decodeSession(text: string, legacyName: string): RunSession | null {
   try {
-    const file = JSON.parse(text) as { format?: string; version?: number; runs?: NamedRun[]; activeIndex?: number };
-    if (file?.format !== "openlyceum-data-lab") {
+    const file: unknown = JSON.parse(text);
+    if (!isRecord(file) || file["format"] !== "openlyceum-data-lab") {
       return null;
     }
-    if (file.version === 1) {
+    if (file["version"] === 1) {
       const session = decodeRun(file);
       return session ? { runs: [{ name: legacyName, session }], activeIndex: 0 } : null;
     }
     const { runs, activeIndex } = file;
     if (
-      file.version !== 2 ||
+      file["version"] !== 2 ||
       !Array.isArray(runs) ||
       typeof activeIndex !== "number" ||
       !Number.isInteger(activeIndex) ||
@@ -116,9 +130,13 @@ export function decodeSession(text: string, legacyName: string): RunSession | nu
       return null;
     }
     const decoded: NamedRun[] = [];
-    for (const run of runs) {
-      const session = decodeRun(run?.session);
-      const name = run?.name;
+    const rawRuns: readonly unknown[] = runs;
+    for (const run of rawRuns) {
+      if (!isRecord(run)) {
+        return null;
+      }
+      const session = decodeRun(run["session"]);
+      const name = run["name"];
       if (!session || typeof name !== "string" || !name.trim() || name.length > MAX_RUN_NAME_LENGTH) {
         return null;
       }
