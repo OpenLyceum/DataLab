@@ -59,6 +59,7 @@ export function capturePasco(onCapture: (data: Dataset, name: string) => void): 
         positions.push(String(position));
         status.textContent = fillPattern(labels.pascoSamplesStringProperty.value, { count: times.length });
         await new Promise<void>((resolve) =>
+          // biome-ignore lint/plugin/no-native-timer: async host/hardware delay (not sim step)
           setTimeout(resolve, Math.max(0, PASCO.INTERVAL_MS - (performance.now() - sent))),
         );
       }

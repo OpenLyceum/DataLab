@@ -77,6 +77,7 @@ export function downloadBlob(blob: Blob, fileName: string): void {
   // deliberate: this is browser plumbing, not simulation time.
   document.body.appendChild(link);
   link.click();
+  // biome-ignore lint/plugin/no-native-timer: async host/hardware delay (not sim step)
   setTimeout(() => {
     link.remove();
     URL.revokeObjectURL(url);
