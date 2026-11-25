@@ -28,7 +28,6 @@
     "dev": "vite",
     "fix": "biome check --write .",
     "format": "biome format --write .",
-    "generate:sample": "node scripts/generate-sample.ts",
     "icons": "node scripts/generate-icons.ts",
     "knip": "knip",
     "lint": "biome check --error-on-warnings .",
@@ -45,7 +44,9 @@
     "test:soak:browser": "npx playwright test tests/soak/browser.spec.ts",
     "test:soak:headless": "vitest run --config vitest.soak.config.ts",
     "test:watch": "vitest",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "generate:sample": "node scripts/generate-sample.ts",
+    "test:browser": "playwright test --project=chromium tests/browser"
   },
   "overrides": {
     "brace-expansion": "~5.0.12",
